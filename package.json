@@ -33,10 +33,14 @@
   "author": "mhchia",
   "module": "dist/js-smp.esm.js",
   "devDependencies": {
+    "@types/bn.js": "^4.11.6",
     "@types/jest": "^25.2.1",
     "husky": "^4.2.5",
     "tsdx": "^0.13.1",
     "tslib": "^1.11.1",
     "typescript": "^3.8.3"
+  },
+  "dependencies": {
+    "bn.js": "^5.1.1"
   }
 }
