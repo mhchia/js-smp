@@ -57,3 +57,24 @@ describe("operate", () => {
   });
 });
 
+describe("exponentiate", () => {
+  test("hardcoded test", () => {
+    const mg = new MultiplicativeGroup(new BN(35), new BN(9));
+    const mgSquared = new MultiplicativeGroup(new BN(35), new BN(11));
+    expect(isEqual(mg.exponentiate(new BN(2)), mgSquared)).toBeTruthy();
+  });
+  test("exponentiate 0", () => {
+    const mg = new MultiplicativeGroup(new BN(35), new BN(4));
+    expect(isEqual(mg.exponentiate(new BN(0)), mg.identity())).toBeTruthy();
+  });
+  test("exponentiation equals continuous multiplications", () => {
+    const mg = new MultiplicativeGroup(new BN(35), new BN(4));
+    expect(isEqual(mg.exponentiate(new BN(1)), mg)).toBeTruthy();
+    expect(isEqual(mg.exponentiate(new BN(2)), mg.operate(mg))).toBeTruthy();
+  });
+  test("exponentiate negative integers", () => {
+    const mg = new MultiplicativeGroup(new BN(35), new BN(4));
+    const mgNegSquare = mg.operate(mg).inverse();
+    expect(isEqual(mg.exponentiate(new BN(-2)), mgNegSquare)).toBeTruthy();
+  });
+});
