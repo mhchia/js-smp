@@ -5,13 +5,34 @@ interface IGroup {
   identity(): IGroup;
   operate(g: IGroup): IGroup;
   inverse(): IGroup;
+  exponentiate(exponent: BN): IGroup;
 }
 
-abstract class AbstractMultiplicativeGroup implements IGroup {
-  abstract identity(): AbstractMultiplicativeGroup;
-  abstract operate(g: AbstractMultiplicativeGroup): AbstractMultiplicativeGroup;
-  abstract inverse(): AbstractMultiplicativeGroup;
-  abstract exponentiate(exponent: BN): AbstractMultiplicativeGroup;
+abstract class BaseGroup implements IGroup {
+  abstract identity(): BaseGroup;
+  abstract operate(g: BaseGroup): BaseGroup;
+  abstract inverse(): BaseGroup;
+  exponentiate(this: BaseGroup, exponent: BN): BaseGroup {
+    let cur = this;
+    let y = this.identity();
+    if (exponent.isNeg()) {
+      cur = cur.inverse();
+      exponent = exponent.neg();
+    }
+    if (exponent.isZero()) {
+      return y;
+    }
+    while (exponent.gtn(1)) {
+      if (exponent.isEven()) {
+        cur = cur.operate(cur);
+        exponent = exponent.divn(2);
+      } else {
+        y = cur.operate(y);
+        exponent = exponent.subn(1).divn(2);
+      }
+    }
+    return y.operate(cur);
+  }
 }
 
 class MultiplicativeGroup extends AbstractMultiplicativeGroup {
@@ -35,28 +56,9 @@ class MultiplicativeGroup extends AbstractMultiplicativeGroup {
     const value = this.value.mul(g.value);
     return new MultiplicativeGroup(this.n, value.umod(this.n));
   }
-
   exponentiate(exponent: BN): MultiplicativeGroup {
-    let cur: MultiplicativeGroup = this;
-    let y = this.identity();
-    if (exponent.isNeg()) {
-      cur = cur.inverse();
-      exponent = exponent.neg();
-    }
-    if (exponent.isZero()) {
-      return y;
-    }
-    while (exponent.gtn(1)) {
-      if (exponent.isEven()) {
-        cur = cur.operate(cur);
-        exponent = exponent.divn(2);
-      } else {
-        y = cur.operate(y);
-        exponent = exponent.subn(1).divn(2);
-      }
-    }
-    return y.operate(cur);
+    return super.exponentiate(exponent) as MultiplicativeGroup;
   }
 }
 
-export {IGroup, AbstractMultiplicativeGroup, MultiplicativeGroup};
+export { IGroup, MultiplicativeGroup };
