@@ -1,5 +1,4 @@
-import BN from "bn.js";
-
+import BN from 'bn.js';
 
 interface IGroup {
   identity(): IGroup;
@@ -35,14 +34,13 @@ abstract class BaseGroup implements IGroup {
   }
 }
 
-class MultiplicativeGroup extends AbstractMultiplicativeGroup {
-  constructor (readonly n: BN, readonly value: BN) {
+class MultiplicativeGroup extends BaseGroup {
+  constructor(readonly n: BN, readonly value: BN) {
     super();
     if (!value.gcd(n).eqn(1)) {
       throw new Error(
-        "n must be coprime to value: " +
-        `n=${ n }, value=${value}`
-      )
+        'n must be coprime to value: ' + `n=${n}, value=${value}`
+      );
     }
   }
   identity(): MultiplicativeGroup {
