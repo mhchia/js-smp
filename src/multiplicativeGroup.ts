@@ -27,6 +27,7 @@ abstract class BaseGroup implements IGroup {
         exponent = exponent.divn(2);
       } else {
         y = cur.operate(y);
+        cur = cur.operate(cur);
         exponent = exponent.subn(1).divn(2);
       }
     }
