@@ -38,9 +38,7 @@ class MultiplicativeGroup extends BaseGroup {
   constructor(readonly n: BN, readonly value: BN) {
     super();
     if (!value.gcd(n).eqn(1)) {
-      throw new Error(
-        'n must be coprime to value: ' + `n=${n}, value=${value}`
-      );
+      throw new Error(`n must be coprime to value: n=${n}, value=${value}`);
     }
   }
   identity(): MultiplicativeGroup {

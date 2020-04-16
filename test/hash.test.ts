@@ -3,7 +3,12 @@ import { hashToInt } from '../src/hash';
 
 describe('version', () => {
   test('hardcoded test', () => {
-    expect(hashToInt(new BN(1))).toEqual(new BN("57153b76f61c2badabeb23203d690a2fe5509e76d1196658af70b2daf62c1aec", "hex"));
+    expect(hashToInt(new BN(1))).toEqual(
+      new BN(
+        '57153b76f61c2badabeb23203d690a2fe5509e76d1196658af70b2daf62c1aec',
+        'hex'
+      )
+    );
   });
   test('versions serve as the prefixes', () => {
     const data1 = new BN(1);
