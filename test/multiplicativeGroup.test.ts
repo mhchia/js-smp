@@ -30,7 +30,7 @@ describe('identity', () => {
     const identityExpected = new MultiplicativeGroup(new BN(35), new BN(1));
     expect(isEqual(mg.identity(), identityExpected)).toBeTruthy();
   });
-  test('every group element with the same modulus share the same identity', () => {
+  test('every group element with the same modulus shares the same identity', () => {
     const mg0 = new MultiplicativeGroup(new BN(35), new BN(9));
     const mg1 = new MultiplicativeGroup(new BN(35), new BN(6));
     expect(isEqual(mg0.identity(), mg1.identity())).toBeTruthy();

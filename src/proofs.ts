@@ -8,14 +8,17 @@
 import BN from 'bn.js';
 import { MultiplicativeGroup } from 'multiplicativeGroup';
 
-type hashFuncType = (version: BN, ...args: BN[]) => BN;
+type THashFunc = (version: BN, ...args: BN[]) => BN;
+
 type ProofDiscreteLog = { c: BN; d: BN };
-// type ProofEqualDiscreteCoordinates = {c: BN, d0: BN, d1: BN};
+type ProofEqualDiscreteCoordinates = { c: BN; d0: BN; d1: BN };
 // type ProofEqualDiscreteLogs = {c: BN, d: BN};
+
+// TODO: Refactor
 
 function makeProofDiscreteLog(
   version: BN,
-  hashFunc: hashFuncType,
+  hashFunc: THashFunc,
   g: MultiplicativeGroup,
   exponent: BN,
   randomValue: BN,
@@ -28,7 +31,7 @@ function makeProofDiscreteLog(
 
 function verifyProofDiscreteLog(
   version: BN,
-  hashFunc: hashFuncType,
+  hashFunc: THashFunc,
   proof: ProofDiscreteLog,
   g: MultiplicativeGroup,
   y: MultiplicativeGroup
@@ -41,4 +44,55 @@ function verifyProofDiscreteLog(
   );
 }
 
-export { makeProofDiscreteLog, verifyProofDiscreteLog };
+function makeProofEqualDiscreteCoordinates(
+  version: BN,
+  hashFunc: THashFunc,
+  g0: MultiplicativeGroup,
+  g1: MultiplicativeGroup,
+  g2: MultiplicativeGroup,
+  exponent0: BN,
+  exponent1: BN,
+  randomValue0: BN,
+  randomValue1: BN,
+  q: BN
+): ProofEqualDiscreteCoordinates {
+  const c = hashFunc(
+    version,
+    g0.exponentiate(randomValue0).value,
+    g1.exponentiate(randomValue0).operate(g2.exponentiate(randomValue1)).value
+  );
+  // d0 = (randomValue0 - exponent0 * c) % q
+  const d0 = randomValue0.sub(exponent0.mul(c)).umod(q);
+  // d1 = (randomValue1 - exponent1 * c) % q
+  const d1 = randomValue1.sub(exponent1.mul(c)).umod(q);
+  return { c: c, d0: d0, d1: d1 };
+}
+
+function verifyProofEqualDiscreteCoordinates(
+  version: BN,
+  hashFunc: THashFunc,
+  g0: MultiplicativeGroup,
+  g1: MultiplicativeGroup,
+  g2: MultiplicativeGroup,
+  y0: MultiplicativeGroup,
+  y1: MultiplicativeGroup,
+  proof: ProofEqualDiscreteCoordinates
+): boolean {
+  return proof.c.eq(
+    hashFunc(
+      version,
+      g0.exponentiate(proof.d0).operate(y0.exponentiate(proof.c)).value,
+      g1
+        .exponentiate(proof.d0)
+        .operate(g2.exponentiate(proof.d1))
+        .operate(y1.exponentiate(proof.c)).value
+    )
+  );
+}
+
+export {
+  makeProofDiscreteLog,
+  verifyProofDiscreteLog,
+  makeProofEqualDiscreteCoordinates,
+  verifyProofEqualDiscreteCoordinates,
+};
