@@ -12,7 +12,7 @@ type THashFunc = (version: BN, ...args: BN[]) => BN;
 
 type ProofDiscreteLog = { c: BN; d: BN };
 type ProofEqualDiscreteCoordinates = { c: BN; d0: BN; d1: BN };
-// type ProofEqualDiscreteLogs = {c: BN, d: BN};
+type ProofEqualDiscreteLogs = { c: BN; d: BN };
 
 // TODO: Refactor
 
@@ -90,9 +90,48 @@ function verifyProofEqualDiscreteCoordinates(
   );
 }
 
+function makeProofEqualDiscreteLogs(
+  version: BN,
+  hashFunc: THashFunc,
+  g0: MultiplicativeGroup,
+  g1: MultiplicativeGroup,
+  exponent: BN,
+  randomValue: BN,
+  q: BN
+): ProofEqualDiscreteLogs {
+  const c = hashFunc(
+    version,
+    g0.exponentiate(randomValue).value,
+    g1.exponentiate(randomValue).value
+  );
+  // d = (randomValue - exponent * c) % q
+  const d = randomValue.sub(exponent.mul(c)).umod(q);
+  return { c: c, d: d };
+}
+
+function verifyProofEqualDiscreteLogs(
+  version: BN,
+  hashFunc: THashFunc,
+  g0: MultiplicativeGroup,
+  g1: MultiplicativeGroup,
+  y0: MultiplicativeGroup,
+  y1: MultiplicativeGroup,
+  proof: ProofEqualDiscreteLogs
+): boolean {
+  return proof.c.eq(
+    hashFunc(
+      version,
+      g0.exponentiate(proof.d).operate(y0.exponentiate(proof.c)).value,
+      g1.exponentiate(proof.d).operate(y1.exponentiate(proof.c)).value
+    )
+  );
+}
+
 export {
   makeProofDiscreteLog,
   verifyProofDiscreteLog,
   makeProofEqualDiscreteCoordinates,
   verifyProofEqualDiscreteCoordinates,
+  makeProofEqualDiscreteLogs,
+  verifyProofEqualDiscreteLogs,
 };

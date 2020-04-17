@@ -4,6 +4,8 @@ import {
   verifyProofDiscreteLog,
   makeProofEqualDiscreteCoordinates,
   verifyProofEqualDiscreteCoordinates,
+  makeProofEqualDiscreteLogs,
+  verifyProofEqualDiscreteLogs,
 } from '../src/proofs';
 import { defaultConfig } from '../src/config';
 import BN from 'bn.js';
@@ -72,6 +74,21 @@ describe('ProofEqualDiscreteCoordinates', () => {
         y1,
         proof
       )
+    ).toBeTruthy();
+  });
+});
+
+describe('ProofEqualDiscreteLogs', () => {
+  test('make and verify', () => {
+    const g0 = getRandomGroupElement();
+    const g1 = getRandomGroupElement();
+    const x = getRandomSecret();
+    const r = getRandomSecret();
+    const y0 = g0.exponentiate(x);
+    const y1 = g1.exponentiate(x);
+    const proof = makeProofEqualDiscreteLogs(version, hash, g0, g1, x, r, q);
+    expect(
+      verifyProofEqualDiscreteLogs(version, hash, g0, g1, y0, y1, proof)
     ).toBeTruthy();
   });
 });
