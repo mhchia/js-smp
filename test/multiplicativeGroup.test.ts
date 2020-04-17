@@ -9,16 +9,18 @@ function isEqual(a: MultiplicativeGroup, b: MultiplicativeGroup): boolean {
 
 describe('constructor', () => {
   test('succeeds', () => {
-    // TODO: A more specific error
-    expect(() => {
-      new MultiplicativeGroup(new BN(35), new BN(9));
-    }).not.toThrow();
+    new MultiplicativeGroup(new BN(35), new BN(9));
   });
-  test('throws when the value and modulus are not co-prime', () => {
-    // TODO: A more specific error
-    expect(() => {
-      new MultiplicativeGroup(new BN(35), new BN(7));
-    }).toThrow();
+});
+
+describe('isValid', () => {
+  test('should be invalid if the value and modulus are not co-prime', () => {
+    const g = new MultiplicativeGroup(new BN(35), new BN(7));
+    expect(g.isValid()).toBeFalsy();
+  });
+  test('should be valid if the value and modulus are co-prime', () => {
+    const g = new MultiplicativeGroup(new BN(35), new BN(4));
+    expect(g.isValid()).toBeTruthy();
   });
 });
 

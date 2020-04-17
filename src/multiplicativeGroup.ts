@@ -38,9 +38,9 @@ abstract class BaseGroup implements IGroup {
 class MultiplicativeGroup extends BaseGroup {
   constructor(readonly n: BN, readonly value: BN) {
     super();
-    if (!value.gcd(n).eqn(1)) {
-      throw new Error(`n must be coprime to value: n=${n}, value=${value}`);
-    }
+  }
+  isValid(this: MultiplicativeGroup): boolean {
+    return this.value.gcd(this.n).eqn(1);
   }
   identity(): MultiplicativeGroup {
     return new MultiplicativeGroup(this.n, new BN(1));
