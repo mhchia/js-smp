@@ -1,8 +1,6 @@
 import BN from 'bn.js';
 import { MultiplicativeGroup } from '../src/multiplicativeGroup';
 
-// TODO: Add factories
-
 describe('constructor', () => {
   test('succeeds', () => {
     new MultiplicativeGroup(new BN(35), new BN(9));

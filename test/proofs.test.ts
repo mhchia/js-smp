@@ -1,4 +1,5 @@
-import { sha256ToInt } from '../src/hash';
+import BN from 'bn.js';
+
 import {
   makeProofDiscreteLog,
   verifyProofDiscreteLog,
@@ -8,33 +9,18 @@ import {
   verifyProofEqualDiscreteLogs,
 } from '../src/proofs';
 import { defaultConfig } from '../src/config';
-import BN from 'bn.js';
-import { randomBytes } from 'crypto';
-import { MultiplicativeGroup } from '../src/multiplicativeGroup';
-
-function hash(version: BN, ...args: BN[]): BN {
-  return sha256ToInt(defaultConfig.modulusSize, version, ...args);
-}
-
-function getRandomSecret(): BN {
-  const buf = randomBytes(defaultConfig.modulusSize);
-  return new BN(buf.toString('hex'), 'hex').umod(defaultConfig.modulus);
-}
-
-function getRandomGroupElement(): MultiplicativeGroup {
-  const secret = getRandomSecret();
-  return defaultConfig.g.exponentiate(secret);
-}
+import { secretFactory, multiplicativeGroupFactory } from '../src/factories';
+import { hash } from '../src/testUtils';
 
 const q = defaultConfig.q;
 const version = new BN(1);
 
 describe('ProofDiscreteLog', () => {
   test('make and verify', () => {
-    const g = getRandomGroupElement();
-    const x = getRandomSecret();
+    const g = multiplicativeGroupFactory();
+    const x = secretFactory();
     const y = g.exponentiate(x);
-    const r = getRandomSecret();
+    const r = secretFactory();
     const pf = makeProofDiscreteLog(version, hash, g, x, r, q);
     expect(verifyProofDiscreteLog(version, hash, pf, g, y)).toBeTruthy();
   });
@@ -42,13 +28,13 @@ describe('ProofDiscreteLog', () => {
 
 describe('ProofEqualDiscreteCoordinates', () => {
   test('make and verify', () => {
-    const g0 = getRandomGroupElement();
-    const g1 = getRandomGroupElement();
-    const g2 = getRandomGroupElement();
-    const x0 = getRandomSecret();
-    const x1 = getRandomSecret();
-    const r0 = getRandomSecret();
-    const r1 = getRandomSecret();
+    const g0 = multiplicativeGroupFactory();
+    const g1 = multiplicativeGroupFactory();
+    const g2 = multiplicativeGroupFactory();
+    const x0 = secretFactory();
+    const x1 = secretFactory();
+    const r0 = secretFactory();
+    const r1 = secretFactory();
     const y0 = g0.exponentiate(x0);
     const y1 = g1.exponentiate(x0).operate(g2.exponentiate(x1));
     const proof = makeProofEqualDiscreteCoordinates(
@@ -80,10 +66,10 @@ describe('ProofEqualDiscreteCoordinates', () => {
 
 describe('ProofEqualDiscreteLogs', () => {
   test('make and verify', () => {
-    const g0 = getRandomGroupElement();
-    const g1 = getRandomGroupElement();
-    const x = getRandomSecret();
-    const r = getRandomSecret();
+    const g0 = multiplicativeGroupFactory();
+    const g1 = multiplicativeGroupFactory();
+    const x = secretFactory();
+    const r = secretFactory();
     const y0 = g0.exponentiate(x);
     const y1 = g1.exponentiate(x);
     const proof = makeProofEqualDiscreteLogs(version, hash, g0, g1, x, r, q);
