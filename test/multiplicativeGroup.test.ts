@@ -3,13 +3,25 @@ import { MultiplicativeGroup } from '../src/multiplicativeGroup';
 
 // TODO: Add factories
 
-function isEqual(a: MultiplicativeGroup, b: MultiplicativeGroup): boolean {
-  return a.n.eq(b.n) && a.value.eq(b.value);
-}
-
 describe('constructor', () => {
   test('succeeds', () => {
     new MultiplicativeGroup(new BN(35), new BN(9));
+  });
+});
+
+describe('equal', () => {
+  const g0 = new MultiplicativeGroup(new BN(35), new BN(9));
+  const g1 = new MultiplicativeGroup(new BN(35), new BN(9));
+  const g2 = new MultiplicativeGroup(new BN(35), new BN(4));
+  const g3 = new MultiplicativeGroup(new BN(13), new BN(9));
+  test('should be equal if both `n` and `value` are the same', () => {
+    expect(g0.equal(g1)).toBeTruthy();
+  });
+  test('should not be equal if `value`s are not the same', () => {
+    expect(g0.equal(g2)).toBeFalsy();
+  });
+  test('should not be equal if `n`s is not the same', () => {
+    expect(g0.equal(g3)).toBeFalsy();
   });
 });
 
@@ -28,12 +40,12 @@ describe('identity', () => {
   test('hardcoded test', () => {
     const mg = new MultiplicativeGroup(new BN(35), new BN(9));
     const identityExpected = new MultiplicativeGroup(new BN(35), new BN(1));
-    expect(isEqual(mg.identity(), identityExpected)).toBeTruthy();
+    expect(mg.identity().equal(identityExpected)).toBeTruthy();
   });
   test('every group element with the same modulus shares the same identity', () => {
     const mg0 = new MultiplicativeGroup(new BN(35), new BN(9));
     const mg1 = new MultiplicativeGroup(new BN(35), new BN(6));
-    expect(isEqual(mg0.identity(), mg1.identity())).toBeTruthy();
+    expect(mg0.identity().equal(mg1.identity())).toBeTruthy();
   });
 });
 
@@ -41,24 +53,24 @@ describe('inverse', () => {
   test('hardcoded test', () => {
     const mg = new MultiplicativeGroup(new BN(35), new BN(9));
     const inverseExpected = new MultiplicativeGroup(new BN(35), new BN(4));
-    expect(isEqual(mg.inverse(), inverseExpected)).toBeTruthy();
+    expect(mg.inverse().equal(inverseExpected)).toBeTruthy();
   });
 });
 
 describe('operate', () => {
   test('operate with identity', () => {
     const mg = new MultiplicativeGroup(new BN(35, 10), new BN(9));
-    expect(isEqual(mg.operate(mg.identity()), mg)).toBeTruthy();
+    expect(mg.operate(mg.identity()).equal(mg)).toBeTruthy();
   });
   test('operate with inverse', () => {
     const mg = new MultiplicativeGroup(new BN(35), new BN(9));
-    expect(isEqual(mg.operate(mg.inverse()), mg.identity())).toBeTruthy();
+    expect(mg.operate(mg.inverse()).equal(mg.identity())).toBeTruthy();
   });
   test('hardcoded test', () => {
     const mg0 = new MultiplicativeGroup(new BN(35), new BN(9));
     const mg1 = new MultiplicativeGroup(new BN(35), new BN(6));
     const mgExpected = new MultiplicativeGroup(new BN(35), new BN(19));
-    expect(isEqual(mg0.operate(mg1), mgExpected)).toBeTruthy();
+    expect(mg0.operate(mg1).equal(mgExpected)).toBeTruthy();
   });
 });
 
@@ -66,7 +78,7 @@ describe('exponentiate', () => {
   test('hardcoded test', () => {
     const mg = new MultiplicativeGroup(new BN(35), new BN(9));
     const mgSquared = new MultiplicativeGroup(new BN(35), new BN(11));
-    expect(isEqual(mg.exponentiate(new BN(2)), mgSquared)).toBeTruthy();
+    expect(mg.exponentiate(new BN(2)).equal(mgSquared)).toBeTruthy();
   });
   test('hardcoded test big number', () => {
     const g = new MultiplicativeGroup(
@@ -89,16 +101,16 @@ describe('exponentiate', () => {
   });
   test('exponentiate 0', () => {
     const mg = new MultiplicativeGroup(new BN(35), new BN(4));
-    expect(isEqual(mg.exponentiate(new BN(0)), mg.identity())).toBeTruthy();
+    expect(mg.exponentiate(new BN(0)).equal(mg.identity())).toBeTruthy();
   });
   test('exponentiation equals continuous multiplications', () => {
     const mg = new MultiplicativeGroup(new BN(35), new BN(4));
-    expect(isEqual(mg.exponentiate(new BN(1)), mg)).toBeTruthy();
-    expect(isEqual(mg.exponentiate(new BN(2)), mg.operate(mg))).toBeTruthy();
+    expect(mg.exponentiate(new BN(1)).equal(mg)).toBeTruthy();
+    expect(mg.exponentiate(new BN(2)).equal(mg.operate(mg))).toBeTruthy();
   });
   test('exponentiate negative integers', () => {
     const mg = new MultiplicativeGroup(new BN(35), new BN(4));
     const mgNegSquare = mg.operate(mg).inverse();
-    expect(isEqual(mg.exponentiate(new BN(-2)), mgNegSquare)).toBeTruthy();
+    expect(mg.exponentiate(new BN(-2)).equal(mgNegSquare)).toBeTruthy();
   });
 });

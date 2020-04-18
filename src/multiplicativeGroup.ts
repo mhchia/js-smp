@@ -5,12 +5,14 @@ interface IGroup {
   operate(g: IGroup): IGroup;
   inverse(): IGroup;
   exponentiate(exponent: BN): IGroup;
+  equal(g: IGroup): boolean;
 }
 
 abstract class BaseGroup implements IGroup {
   abstract identity(): BaseGroup;
   abstract operate(g: BaseGroup): BaseGroup;
   abstract inverse(): BaseGroup;
+  abstract equal(g: BaseGroup): boolean;
   exponentiate(this: BaseGroup, exponent: BN): BaseGroup {
     let cur = this;
     let y = this.identity();
@@ -53,7 +55,10 @@ class MultiplicativeGroup extends BaseGroup {
     const value = this.value.mul(g.value);
     return new MultiplicativeGroup(this.n, value.umod(this.n));
   }
-  exponentiate(exponent: BN): MultiplicativeGroup {
+  equal(this: MultiplicativeGroup, g: MultiplicativeGroup): boolean {
+    return this.n.eq(g.n) && this.value.eq(g.value);
+  }
+  exponentiate(this: MultiplicativeGroup, exponent: BN): MultiplicativeGroup {
     return super.exponentiate(exponent) as MultiplicativeGroup;
   }
 }
