@@ -13,10 +13,12 @@ type Config = {
   endian: 'be' | 'le';
 };
 
-export const defaultConfig: Config = {
+const defaultConfig: Config = {
   modulus: modulusInt,
   modulusSize: MODULUS_BITS / 8, // in bytes
   q: modulusInt.subn(1).divn(2), // q = (p - 1) / 2
   g: new MultiplicativeGroup(modulusInt, new BN(GENERATOR)),
   endian: ENDIAN,
 };
+
+export { Config, defaultConfig };

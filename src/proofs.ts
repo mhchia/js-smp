@@ -14,8 +14,6 @@ type ProofDiscreteLog = { c: BN; d: BN };
 type ProofEqualDiscreteCoordinates = { c: BN; d0: BN; d1: BN };
 type ProofEqualDiscreteLogs = { c: BN; d: BN };
 
-// TODO: Refactor
-
 function makeProofDiscreteLog(
   version: BN,
   hashFunc: THashFunc,
@@ -128,6 +126,10 @@ function verifyProofEqualDiscreteLogs(
 }
 
 export {
+  THashFunc,
+  ProofDiscreteLog,
+  ProofEqualDiscreteCoordinates,
+  ProofEqualDiscreteLogs,
   makeProofDiscreteLog,
   verifyProofDiscreteLog,
   makeProofEqualDiscreteCoordinates,
