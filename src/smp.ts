@@ -150,12 +150,12 @@ class SMPState {
     return [pL, qL, proof];
   }
 
-  makePRQRProof(
+  verifyPRQRProof(
     version: BN,
     pR: MultiplicativeGroup,
     qR: MultiplicativeGroup,
     proof: ProofEqualDiscreteCoordinates
-  ) {
+  ): boolean {
     if (this.g2 === undefined || this.g3 === undefined) {
       throw new Error('require `g2` and `g3` to be set');
     }

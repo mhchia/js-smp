@@ -78,7 +78,7 @@ function smpWithState(x: BN, y: BN): boolean {
   }
 
   // `Pb`, `Qb`
-  if (!alice.makePRQRProof(new BN(5), pb, qb, pbqbProof)) {
+  if (!alice.verifyPRQRProof(new BN(5), pb, qb, pbqbProof)) {
     throw new Error('Alice: `pbqbProof` is invalid');
   }
   alice.pR = pb;
@@ -98,7 +98,7 @@ function smpWithState(x: BN, y: BN): boolean {
     calculates `Rb` and `Rab` accordingly.
   */
   // `Pa` and `Qa`
-  if (!bob.makePRQRProof(new BN(6), pa, qa, paqaProof)) {
+  if (!bob.verifyPRQRProof(new BN(6), pa, qa, paqaProof)) {
     throw new Error('Bob: `paqaProof` is invalid');
   }
   // NOTE: `Pa` is Bob's `Pb`
