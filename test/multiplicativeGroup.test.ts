@@ -1,4 +1,5 @@
 import BN from 'bn.js';
+
 import { MultiplicativeGroup } from '../src/multiplicativeGroup';
 
 describe('constructor', () => {

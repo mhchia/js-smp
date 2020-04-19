@@ -1,9 +1,10 @@
+import { randomBytes } from 'crypto';
+
 import BN from 'bn.js';
 
 import { MultiplicativeGroup } from '../src/multiplicativeGroup';
 import { Config } from '../src/config';
 import { sha256ToInt } from '../src/hash';
-import { randomBytes } from 'crypto';
 
 import {
   makeProofDiscreteLog,
@@ -17,11 +18,11 @@ import {
   ProofEqualDiscreteLogs,
 } from '../src/proofs';
 
-
 // TODO:
 //  - Add SMPStateMachine according to the spec.
 //  - Validate parameters.
 //  - Make sure modulus is correct(using p or q).
+//  - Refactor
 class SMPState {
   config: Config;
   isInitiator: boolean;

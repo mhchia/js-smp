@@ -1,5 +1,6 @@
-import BN from 'bn.js';
 import { randomBytes } from 'crypto';
+
+import BN from 'bn.js';
 
 import { defaultConfig } from '../src/config';
 import { MultiplicativeGroup } from '../src/multiplicativeGroup';

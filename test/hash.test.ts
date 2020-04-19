@@ -1,4 +1,5 @@
 import BN from 'bn.js';
+
 import { sha256ToInt } from '../src/hash';
 import { defaultConfig } from '../src/config';
 

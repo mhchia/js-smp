@@ -1,11 +1,5 @@
-/*
-  hash
-  {make|verify}proofDiscreteLog
-  {make|verify}proofEqualDiscreteCoordinates
-  {make|verify}proofEqualDiscreteLogs
-*/
-
 import BN from 'bn.js';
+
 import { MultiplicativeGroup } from 'multiplicativeGroup';
 
 type THashFunc = (version: BN, ...args: BN[]) => BN;
