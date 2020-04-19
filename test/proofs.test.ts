@@ -10,10 +10,14 @@ import {
 } from '../src/proofs';
 import { defaultConfig } from '../src/config';
 import { secretFactory, multiplicativeGroupFactory } from '../src/factories';
-import { hash } from '../src/testUtils';
+import { sha256ToInt } from '../src/hash';
 
 const q = defaultConfig.q;
 const version = new BN(1);
+
+function hash(version: BN, ...args: BN[]): BN {
+  return sha256ToInt(defaultConfig.modulusSize, version, ...args);
+}
 
 describe('ProofDiscreteLog', () => {
   test('make and verify', () => {
