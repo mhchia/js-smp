@@ -17,6 +17,11 @@ import {
   ProofEqualDiscreteLogs,
 } from '../src/proofs';
 
+
+// TODO:
+//  - Add SMPStateMachine according to the spec.
+//  - Validate parameters.
+//  - Make sure modulus is correct(using p or q).
 class SMPState {
   config: Config;
   isInitiator: boolean;
@@ -24,7 +29,7 @@ class SMPState {
   // SMP secret
   x: BN;
 
-  // Shared
+  // Public
   g1: MultiplicativeGroup;
   q: BN;
 
