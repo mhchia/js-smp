@@ -17,37 +17,37 @@ import {
   ProofEqualDiscreteLogs,
 } from '../src/proofs';
 
-// Contain versions and steps?
 class SMPState {
   config: Config;
   isInitiator: boolean;
+
+  // SMP secret
+  x: BN;
 
   // Shared
   g1: MultiplicativeGroup;
   q: BN;
 
   // Our secrets
-  x: BN;
-  a2?: BN;
-  a3?: BN;
-  s?: BN;
+  s2?: BN;
+  s3?: BN;
 
-  // Our public
-  g2a?: MultiplicativeGroup;
-  g3a?: MultiplicativeGroup;
-  pa?: MultiplicativeGroup;
-  qa?: MultiplicativeGroup;
-  ra?: MultiplicativeGroup;
+  // Ours(L means local) on the wire
+  g2L?: MultiplicativeGroup;
+  g3L?: MultiplicativeGroup;
+  pL?: MultiplicativeGroup;
+  qL?: MultiplicativeGroup;
+  rL?: MultiplicativeGroup;
 
-  // Their public
-  g2b?: MultiplicativeGroup;
-  g3b?: MultiplicativeGroup;
-  pb?: MultiplicativeGroup;
-  qb?: MultiplicativeGroup;
-  rb?: MultiplicativeGroup;
+  // Theirs(R means remote) on the wire
+  g2R?: MultiplicativeGroup;
+  g3R?: MultiplicativeGroup;
+  pR?: MultiplicativeGroup;
+  qR?: MultiplicativeGroup;
+  rR?: MultiplicativeGroup;
 
   // DH shared
-  rab?: MultiplicativeGroup;
+  r?: MultiplicativeGroup;
   g2?: MultiplicativeGroup;
   g3?: MultiplicativeGroup;
 
@@ -62,6 +62,7 @@ class SMPState {
   hash(this: SMPState, version: BN, ...args: BN[]): BN {
     return sha256ToInt(this.config.modulusSize, version, ...args);
   }
+
   getRandomSecret(): BN {
     const buf = randomBytes(this.config.modulusSize);
     return new BN(buf.toString('hex'), 'hex').umod(this.config.modulus);
@@ -83,18 +84,18 @@ class SMPState {
     return [pubkey, proof];
   }
 
-  makeG2a(version: BN): [MultiplicativeGroup, ProofDiscreteLog] {
-    if (this.a2 === undefined) {
-      throw new Error('require `a2` to be set');
+  makeG2L(version: BN): [MultiplicativeGroup, ProofDiscreteLog] {
+    if (this.s2 === undefined) {
+      throw new Error('require `s2` to be set');
     }
-    return this.makeDHPubkey(version, this.a2);
+    return this.makeDHPubkey(version, this.s2);
   }
 
-  makeG3a(version: BN): [MultiplicativeGroup, ProofDiscreteLog] {
-    if (this.a3 === undefined) {
-      throw new Error('require `a3` to be set');
+  makeG3L(version: BN): [MultiplicativeGroup, ProofDiscreteLog] {
+    if (this.s3 === undefined) {
+      throw new Error('require `s3` to be set');
     }
-    return this.makeDHPubkey(version, this.a3);
+    return this.makeDHPubkey(version, this.s3);
   }
 
   verifyDHPubkey(
@@ -118,39 +119,36 @@ class SMPState {
     return g.exponentiate(secretKey);
   }
 
-  makePaQa(
+  makePLQL(
     version: BN
   ): [MultiplicativeGroup, MultiplicativeGroup, ProofEqualDiscreteCoordinates] {
-    if (
-      this.g2 === undefined ||
-      this.g3 === undefined ||
-      this.s === undefined
-    ) {
-      throw new Error('require `g2`, `g3`, and the secret `s` to be set');
+    if (this.g2 === undefined || this.g3 === undefined) {
+      throw new Error('require `g2` and `g3` to be set');
     }
-    const pa = this.g3.exponentiate(this.s);
-    const qa = this.g1
-      .exponentiate(this.s)
+    const randomValue = this.getRandomSecret();
+    const pL = this.g3.exponentiate(randomValue);
+    const qL = this.g1
+      .exponentiate(randomValue)
       .operate(this.g2.exponentiate(this.x));
-    const paQaProof = makeProofEqualDiscreteCoordinates(
+    const proof = makeProofEqualDiscreteCoordinates(
       version,
       this.hash.bind(this),
       this.g3,
       this.g1,
       this.g2,
-      this.s,
+      randomValue,
       this.x,
       this.getRandomSecret(),
       this.getRandomSecret(),
       this.q
     );
-    return [pa, qa, paQaProof];
+    return [pL, qL, proof];
   }
 
-  verifyPbQbProof(
+  makePRQRProof(
     version: BN,
-    pb: MultiplicativeGroup,
-    qb: MultiplicativeGroup,
+    pR: MultiplicativeGroup,
+    qR: MultiplicativeGroup,
     proof: ProofEqualDiscreteCoordinates
   ) {
     if (this.g2 === undefined || this.g3 === undefined) {
@@ -162,93 +160,90 @@ class SMPState {
       this.g3,
       this.g1,
       this.g2,
-      pb,
-      qb,
+      pR,
+      qR,
       proof
     );
   }
 
-  makeRa(
-    this: SMPState,
-    version: BN
-  ): [MultiplicativeGroup, ProofEqualDiscreteLogs] {
+  makeRL(version: BN): [MultiplicativeGroup, ProofEqualDiscreteLogs] {
     if (
-      this.qa === undefined ||
-      this.qb === undefined ||
-      this.a3 === undefined
+      this.qL === undefined ||
+      this.qR === undefined ||
+      this.s3 === undefined
     ) {
-      throw new Error('require `qa`, `qb`, and `a3` to be set');
+      throw new Error('require `qL`, `qR`, and `s3` to be set');
     }
-    let qaDivQb: MultiplicativeGroup;
+    let qInitiatorDivResponder: MultiplicativeGroup;
     if (this.isInitiator) {
-      qaDivQb = this.qa.operate(this.qb.inverse());
+      qInitiatorDivResponder = this.qL.operate(this.qR.inverse());
     } else {
-      qaDivQb = this.qb.operate(this.qa.inverse());
+      qInitiatorDivResponder = this.qR.operate(this.qL.inverse());
     }
-    const ra = qaDivQb.exponentiate(this.a3);
+    const rL = qInitiatorDivResponder.exponentiate(this.s3);
     const raProof = makeProofEqualDiscreteLogs(
       version,
       this.hash.bind(this),
       this.g1,
-      qaDivQb,
-      this.a3,
+      qInitiatorDivResponder,
+      this.s3,
       this.getRandomSecret(),
       this.q
     );
-    return [ra, raProof];
+    return [rL, raProof];
   }
 
-  verifyRb(
+  verifyRR(
     version: BN,
-    rb: MultiplicativeGroup,
+    rR: MultiplicativeGroup,
     proof: ProofEqualDiscreteLogs
   ): boolean {
     if (
-      this.qa === undefined ||
-      this.qb === undefined ||
-      this.g3b === undefined
+      this.qL === undefined ||
+      this.qR === undefined ||
+      this.g3R === undefined
     ) {
-      throw new Error('require `qa`, `qb`, and `g3b` to be set');
+      throw new Error('require `qL`, `qR`, and `g3R` to be set');
     }
-    let qaDivQb: MultiplicativeGroup;
+    let qInitiatorDivResponder: MultiplicativeGroup;
     if (this.isInitiator) {
-      qaDivQb = this.qa.operate(this.qb.inverse());
+      qInitiatorDivResponder = this.qL.operate(this.qR.inverse());
     } else {
-      qaDivQb = this.qb.operate(this.qa.inverse());
+      qInitiatorDivResponder = this.qR.operate(this.qL.inverse());
     }
     return verifyProofEqualDiscreteLogs(
       version,
       this.hash.bind(this),
       this.g1,
-      qaDivQb,
-      this.g3b,
-      rb,
+      qInitiatorDivResponder,
+      this.g3R,
+      rR,
       proof
     );
   }
 
-  makeRab(): MultiplicativeGroup {
-    if (this.rb === undefined || this.a3 === undefined) {
-      throw new Error('require `rb`, `a3` to be set');
+  makeR(): MultiplicativeGroup {
+    if (this.rR === undefined || this.s3 === undefined) {
+      throw new Error('require `rR`, `s3` to be set');
     }
-    return this.rb.exponentiate(this.a3);
+    return this.rR.exponentiate(this.s3);
   }
 
   getResult(): boolean {
     if (
-      this.rab === undefined ||
-      this.pa === undefined ||
-      this.pb === undefined
+      this.r === undefined ||
+      this.pL === undefined ||
+      this.pR === undefined
     ) {
-      throw new Error('require `rab`, `pa`, and `pb` to be set');
+      throw new Error('require `r`, `pL`, and `pR` to be set');
     }
-    let paDivPb: MultiplicativeGroup;
+    let pInitiatorDivResponder: MultiplicativeGroup;
     if (this.isInitiator) {
-      paDivPb = this.pa.operate(this.pb.inverse());
+      pInitiatorDivResponder = this.pL.operate(this.pR.inverse());
     } else {
-      paDivPb = this.pb.operate(this.pa.inverse());
+      pInitiatorDivResponder = this.pR.operate(this.pL.inverse());
     }
-    return this.rab.equal(paDivPb);
+    return this.r.equal(pInitiatorDivResponder);
   }
 }
 

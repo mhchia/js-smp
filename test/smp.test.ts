@@ -13,12 +13,12 @@ function smpWithState(x: BN, y: BN): boolean {
   /*
     Step 0: Alice initaites smp, sending `g2a`, `g3a` to Bob.
   */
-  alice.a2 = secretFactory();
-  alice.a3 = secretFactory();
-  const [g2a, g2aProof] = alice.makeG2a(new BN(1));
-  const [g3a, g3aProof] = alice.makeG3a(new BN(2));
-  alice.g2a = g2a;
-  alice.g3a = g3a;
+  alice.s2 = secretFactory();
+  alice.s3 = secretFactory();
+  const [g2a, g2aProof] = alice.makeG2L(new BN(1));
+  const [g3a, g3aProof] = alice.makeG3L(new BN(2));
+  alice.g2L = g2a;
+  alice.g3L = g3a;
   // Send `g2a` and `g3a` to Bob
 
   /*
@@ -33,26 +33,23 @@ function smpWithState(x: BN, y: BN): boolean {
     throw new Error('Bob: `g3a` proof is invalid');
   }
   // Save the slices from alice
-  bob.g2b = g2a;
-  bob.g3b = g3a;
+  bob.g2R = g2a;
+  bob.g3R = g3a;
   // Create secrets
-  bob.a2 = secretFactory();
-  bob.a3 = secretFactory();
-  bob.s = secretFactory();
+  bob.s2 = secretFactory();
+  bob.s3 = secretFactory();
   // Calculate its DH slice
-  const [g2b, g2bProof] = bob.makeG2a(new BN(3));
-  const [g3b, g3bProof] = bob.makeG3a(new BN(4));
-  // NOTE: For bob, `g2b` is its `g2a`.
-  bob.g2a = g2b;
-  bob.g3a = g3b;
+  const [g2b, g2bProof] = bob.makeG2L(new BN(3));
+  const [g3b, g3bProof] = bob.makeG3L(new BN(4));
+  bob.g2L = g2b;
+  bob.g3L = g3b;
   // Perform DH
-  bob.g2 = bob.makeDHSharedSecret(g2a, bob.a2);
-  bob.g3 = bob.makeDHSharedSecret(g3a, bob.a3);
+  bob.g2 = bob.makeDHSharedSecret(g2a, bob.s2);
+  bob.g3 = bob.makeDHSharedSecret(g3a, bob.s3);
   // Make `Pb` and `Qb`
-  const [pb, qb, pbqbProof] = bob.makePaQa(new BN(5));
-  // NOTE: For bob, `Pb` is its `Pa`.
-  bob.pa = pb;
-  bob.qa = qb;
+  const [pb, qb, pbqbProof] = bob.makePLQL(new BN(5));
+  bob.pL = pb;
+  bob.qL = qb;
   // Send `g2b`, `g3b`, `Pb`, `Qb` along with their proofs to Alice
 
   /*
@@ -66,11 +63,11 @@ function smpWithState(x: BN, y: BN): boolean {
     throw new Error('Alice: `g3b` proof is invalid');
   }
   // Save the slices from Bob
-  alice.g2b = g2b;
-  alice.g3b = g3b;
+  alice.g2R = g2b;
+  alice.g3R = g3b;
   // Perform DH
-  alice.g2 = alice.makeDHSharedSecret(g2b, alice.a2);
-  alice.g3 = alice.makeDHSharedSecret(g3b, alice.a3);
+  alice.g2 = alice.makeDHSharedSecret(g2b, alice.s2);
+  alice.g3 = alice.makeDHSharedSecret(g3b, alice.s3);
 
   // NOTE: Sanity check that `alice.g2 == bob.g2` and `alice.g3 == bob.g3`
   if (!alice.g2.equal(bob.g2)) {
@@ -81,20 +78,18 @@ function smpWithState(x: BN, y: BN): boolean {
   }
 
   // `Pb`, `Qb`
-  if (!alice.verifyPbQbProof(new BN(5), pb, qb, pbqbProof)) {
+  if (!alice.makePRQRProof(new BN(5), pb, qb, pbqbProof)) {
     throw new Error('Alice: `pbqbProof` is invalid');
   }
-  alice.pb = pb;
-  alice.qb = qb;
-  // Create secret `s`
-  alice.s = secretFactory();
+  alice.pR = pb;
+  alice.qR = qb;
   // Calculate `Pa` and `Qa`
-  const [pa, qa, paqaProof] = alice.makePaQa(new BN(6));
-  alice.pa = pa;
-  alice.qa = qa;
+  const [pa, qa, paqaProof] = alice.makePLQL(new BN(6));
+  alice.pL = pa;
+  alice.qL = qa;
   // Calculate `Ra`
-  const [ra, raProof] = alice.makeRa(new BN(7));
-  alice.ra = ra;
+  const [ra, raProof] = alice.makeRL(new BN(7));
+  alice.rL = ra;
 
   // Send `Pa`, `Qa` and `Ra` to Bob
 
@@ -103,38 +98,38 @@ function smpWithState(x: BN, y: BN): boolean {
     calculates `Rb` and `Rab` accordingly.
   */
   // `Pa` and `Qa`
-  if (!bob.verifyPbQbProof(new BN(6), pa, qa, paqaProof)) {
+  if (!bob.makePRQRProof(new BN(6), pa, qa, paqaProof)) {
     throw new Error('Bob: `paqaProof` is invalid');
   }
   // NOTE: `Pa` is Bob's `Pb`
-  bob.pb = pa;
-  bob.qb = qa;
+  bob.pR = pa;
+  bob.qR = qa;
   // `Ra`
-  if (!bob.verifyRb(new BN(7), ra, raProof)) {
+  if (!bob.verifyRR(new BN(7), ra, raProof)) {
     throw new Error('Bob: `raProof` is invalid');
   }
   // NOTE: `Ra` is Bob's `Rb`
-  bob.rb = ra;
+  bob.rR = ra;
   // Calculate `Rb`
-  const [rb, rbProof] = bob.makeRa(new BN(8));
+  const [rb, rbProof] = bob.makeRL(new BN(8));
   // NOTE: `Rb` is Bob's `Ra`
-  bob.ra = rb;
+  bob.rL = rb;
   // Calculate `Rab`
-  bob.rab = bob.makeRab();
+  bob.r = bob.makeR();
   // Send `Rb` to Alice
 
   /*
     Step 4: Alice receives `Rb` and calculate `Rab` as well.
   */
   // Verify `Rb`
-  if (!alice.verifyRb(new BN(8), rb, rbProof)) {
+  if (!alice.verifyRR(new BN(8), rb, rbProof)) {
     throw new Error('Alice: `rbProof` is invalid');
   }
-  alice.rb = rb;
+  alice.rR = rb;
   // Calculate `Rab`
-  alice.rab = alice.makeRab();
+  alice.r = alice.makeR();
   // Sanity check that `alice.rab == bob.rab`
-  if (!alice.rab.equal(bob.rab)) {
+  if (!alice.r.equal(bob.r)) {
     throw new Error('`rab` is not shared successfully by Alice and Bob');
   }
   // Sanity check
