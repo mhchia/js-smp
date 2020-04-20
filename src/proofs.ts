@@ -2,42 +2,36 @@ import BN from 'bn.js';
 
 import { MultiplicativeGroup } from 'multiplicativeGroup';
 
-type THashFunc = (version: BN, ...args: BN[]) => BN;
+type THashFunc = (...args: BN[]) => BN;
 
 type ProofDiscreteLog = { c: BN; d: BN };
 type ProofEqualDiscreteCoordinates = { c: BN; d0: BN; d1: BN };
 type ProofEqualDiscreteLogs = { c: BN; d: BN };
 
 function makeProofDiscreteLog(
-  version: BN,
   hashFunc: THashFunc,
   g: MultiplicativeGroup,
   exponent: BN,
   randomValue: BN,
   q: BN
 ): ProofDiscreteLog {
-  const c = hashFunc(version, g.exponentiate(randomValue).value);
+  const c = hashFunc(g.exponentiate(randomValue).value);
   const d = randomValue.sub(exponent.mul(c)).umod(q);
   return { c: c, d: d };
 }
 
 function verifyProofDiscreteLog(
-  version: BN,
   hashFunc: THashFunc,
   proof: ProofDiscreteLog,
   g: MultiplicativeGroup,
   y: MultiplicativeGroup
 ): boolean {
   return proof.c.eq(
-    hashFunc(
-      version,
-      g.exponentiate(proof.d).operate(y.exponentiate(proof.c)).value
-    )
+    hashFunc(g.exponentiate(proof.d).operate(y.exponentiate(proof.c)).value)
   );
 }
 
 function makeProofEqualDiscreteCoordinates(
-  version: BN,
   hashFunc: THashFunc,
   g0: MultiplicativeGroup,
   g1: MultiplicativeGroup,
@@ -49,7 +43,6 @@ function makeProofEqualDiscreteCoordinates(
   q: BN
 ): ProofEqualDiscreteCoordinates {
   const c = hashFunc(
-    version,
     g0.exponentiate(randomValue0).value,
     g1.exponentiate(randomValue0).operate(g2.exponentiate(randomValue1)).value
   );
@@ -61,7 +54,6 @@ function makeProofEqualDiscreteCoordinates(
 }
 
 function verifyProofEqualDiscreteCoordinates(
-  version: BN,
   hashFunc: THashFunc,
   g0: MultiplicativeGroup,
   g1: MultiplicativeGroup,
@@ -72,7 +64,6 @@ function verifyProofEqualDiscreteCoordinates(
 ): boolean {
   return proof.c.eq(
     hashFunc(
-      version,
       g0.exponentiate(proof.d0).operate(y0.exponentiate(proof.c)).value,
       g1
         .exponentiate(proof.d0)
@@ -83,7 +74,6 @@ function verifyProofEqualDiscreteCoordinates(
 }
 
 function makeProofEqualDiscreteLogs(
-  version: BN,
   hashFunc: THashFunc,
   g0: MultiplicativeGroup,
   g1: MultiplicativeGroup,
@@ -92,7 +82,6 @@ function makeProofEqualDiscreteLogs(
   q: BN
 ): ProofEqualDiscreteLogs {
   const c = hashFunc(
-    version,
     g0.exponentiate(randomValue).value,
     g1.exponentiate(randomValue).value
   );
@@ -102,7 +91,6 @@ function makeProofEqualDiscreteLogs(
 }
 
 function verifyProofEqualDiscreteLogs(
-  version: BN,
   hashFunc: THashFunc,
   g0: MultiplicativeGroup,
   g1: MultiplicativeGroup,
@@ -112,7 +100,6 @@ function verifyProofEqualDiscreteLogs(
 ): boolean {
   return proof.c.eq(
     hashFunc(
-      version,
       g0.exponentiate(proof.d).operate(y0.exponentiate(proof.c)).value,
       g1.exponentiate(proof.d).operate(y1.exponentiate(proof.c)).value
     )

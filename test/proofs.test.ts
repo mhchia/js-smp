@@ -13,10 +13,9 @@ import { secretFactory, multiplicativeGroupFactory } from '../src/factories';
 import { sha256ToInt } from '../src/hash';
 
 const q = defaultConfig.q;
-const version = new BN(1);
 
-function hash(version: BN, ...args: BN[]): BN {
-  return sha256ToInt(defaultConfig.modulusSize, version, ...args);
+function hash(...args: BN[]): BN {
+  return sha256ToInt(defaultConfig.modulusSize, ...args);
 }
 
 describe('ProofDiscreteLog', () => {
@@ -25,8 +24,8 @@ describe('ProofDiscreteLog', () => {
     const x = secretFactory();
     const y = g.exponentiate(x);
     const r = secretFactory();
-    const pf = makeProofDiscreteLog(version, hash, g, x, r, q);
-    expect(verifyProofDiscreteLog(version, hash, pf, g, y)).toBeTruthy();
+    const pf = makeProofDiscreteLog(hash, g, x, r, q);
+    expect(verifyProofDiscreteLog(hash, pf, g, y)).toBeTruthy();
   });
 });
 
@@ -42,7 +41,6 @@ describe('ProofEqualDiscreteCoordinates', () => {
     const y0 = g0.exponentiate(x0);
     const y1 = g1.exponentiate(x0).operate(g2.exponentiate(x1));
     const proof = makeProofEqualDiscreteCoordinates(
-      version,
       hash,
       g0,
       g1,
@@ -54,16 +52,7 @@ describe('ProofEqualDiscreteCoordinates', () => {
       q
     );
     expect(
-      verifyProofEqualDiscreteCoordinates(
-        version,
-        hash,
-        g0,
-        g1,
-        g2,
-        y0,
-        y1,
-        proof
-      )
+      verifyProofEqualDiscreteCoordinates(hash, g0, g1, g2, y0, y1, proof)
     ).toBeTruthy();
   });
 });
@@ -76,9 +65,9 @@ describe('ProofEqualDiscreteLogs', () => {
     const r = secretFactory();
     const y0 = g0.exponentiate(x);
     const y1 = g1.exponentiate(x);
-    const proof = makeProofEqualDiscreteLogs(version, hash, g0, g1, x, r, q);
+    const proof = makeProofEqualDiscreteLogs(hash, g0, g1, x, r, q);
     expect(
-      verifyProofEqualDiscreteLogs(version, hash, g0, g1, y0, y1, proof)
+      verifyProofEqualDiscreteLogs(hash, g0, g1, y0, y1, proof)
     ).toBeTruthy();
   });
 });

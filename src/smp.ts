@@ -16,6 +16,7 @@ import {
   ProofDiscreteLog,
   ProofEqualDiscreteCoordinates,
   ProofEqualDiscreteLogs,
+  THashFunc,
 } from '../src/proofs';
 
 // TODO:
@@ -65,8 +66,10 @@ class SMPState {
     this.q = config.q;
   }
 
-  hash(this: SMPState, version: BN, ...args: BN[]): BN {
-    return sha256ToInt(this.config.modulusSize, version, ...args);
+  getHashFunc(this: SMPState, version: BN): THashFunc {
+    return (...args: BN[]): BN => {
+      return sha256ToInt(this.config.modulusSize, version, ...args);
+    };
   }
 
   getRandomSecret(): BN {
@@ -80,8 +83,7 @@ class SMPState {
   ): [MultiplicativeGroup, ProofDiscreteLog] {
     const pubkey = this.g1.exponentiate(secretKey);
     const proof = makeProofDiscreteLog(
-      version,
-      this.hash.bind(this),
+      this.getHashFunc(version),
       this.g1,
       secretKey,
       this.getRandomSecret(),
@@ -110,8 +112,7 @@ class SMPState {
     proof: ProofDiscreteLog
   ): boolean {
     return verifyProofDiscreteLog(
-      version,
-      this.hash.bind(this),
+      this.getHashFunc(version),
       proof,
       this.g1,
       pubkey
@@ -137,8 +138,7 @@ class SMPState {
       .exponentiate(randomValue)
       .operate(this.g2.exponentiate(this.x));
     const proof = makeProofEqualDiscreteCoordinates(
-      version,
-      this.hash.bind(this),
+      this.getHashFunc(version),
       this.g3,
       this.g1,
       this.g2,
@@ -161,8 +161,7 @@ class SMPState {
       throw new Error('require `g2` and `g3` to be set');
     }
     return verifyProofEqualDiscreteCoordinates(
-      version,
-      this.hash.bind(this),
+      this.getHashFunc(version),
       this.g3,
       this.g1,
       this.g2,
@@ -188,8 +187,7 @@ class SMPState {
     }
     const rL = qInitiatorDivResponder.exponentiate(this.s3);
     const raProof = makeProofEqualDiscreteLogs(
-      version,
-      this.hash.bind(this),
+      this.getHashFunc(version),
       this.g1,
       qInitiatorDivResponder,
       this.s3,
@@ -218,8 +216,7 @@ class SMPState {
       qInitiatorDivResponder = this.qR.operate(this.qL.inverse());
     }
     return verifyProofEqualDiscreteLogs(
-      version,
-      this.hash.bind(this),
+      this.getHashFunc(version),
       this.g1,
       qInitiatorDivResponder,
       this.g3R,
