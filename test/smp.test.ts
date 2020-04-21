@@ -1,12 +1,10 @@
 import BN from 'bn.js';
 
-import { defaultConfig } from '../src/config';
-
 import { SMPStateMachine } from '../src/smp';
 
 function smp(x: BN, y: BN): boolean {
-  const alice = new SMPStateMachine(defaultConfig, x); // Initiator
-  const bob = new SMPStateMachine(defaultConfig, y); // Responder
+  const alice = new SMPStateMachine(x); // Initiator
+  const bob = new SMPStateMachine(y); // Responder
 
   const msg1 = alice.beginSMP();
   const msg2 = bob.handleSMPMessage1(msg1);
@@ -37,10 +35,16 @@ function smp(x: BN, y: BN): boolean {
     throw new Error('`rab` is not shared successfully by Alice and Bob');
   }
   // Sanity check
-  if (alice.state.getResult(true) !== bob.state.getResult(false)) {
+  if (alice.result === undefined) {
+    throw new Error("smp should should have finished on Alice's side");
+  }
+  if (bob.result === undefined) {
+    throw new Error("smp should should have finished on Bob's side");
+  }
+  if (alice.result !== bob.result) {
     throw new Error('Alice and Bob get different result!');
   }
-  return alice.state.getResult(true);
+  return alice.result;
 }
 
 describe('test smp', () => {

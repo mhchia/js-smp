@@ -3,7 +3,7 @@ import { randomBytes } from 'crypto';
 import BN from 'bn.js';
 
 import { MultiplicativeGroup } from '../src/multiplicativeGroup';
-import { Config } from '../src/config';
+import { Config, defaultConfig } from '../src/config';
 import { sha256ToInt } from '../src/hash';
 
 import {
@@ -94,9 +94,6 @@ class SMPMessage4 implements ISMPMessage {
 }
 
 // TODO:
-//  - Add SMPStateMachine according to the spec.
-//  - Validate parameters.
-//  - Make sure modulus is correct(using p or q).
 //  - Refactor
 class SMPState {
   config: Config;
@@ -131,7 +128,7 @@ class SMPState {
   g2?: MultiplicativeGroup;
   g3?: MultiplicativeGroup;
 
-  constructor(config: Config, x: BN) {
+  constructor(x: BN, config: Config) {
     this.config = config;
     this.x = x;
     this.g1 = config.g;
@@ -242,103 +239,27 @@ class SMPState {
       proof
     );
   }
-
-  makeRL(
-    version: BN,
-    isInitiator: boolean
-  ): [MultiplicativeGroup, ProofEqualDiscreteLogs] {
-    if (
-      this.qL === undefined ||
-      this.qR === undefined ||
-      this.s3 === undefined
-    ) {
-      throw new Error('require `qL`, `qR`, and `s3` to be set');
-    }
-    let qInitiatorDivResponder: MultiplicativeGroup;
-    if (isInitiator) {
-      qInitiatorDivResponder = this.qL.operate(this.qR.inverse());
-    } else {
-      qInitiatorDivResponder = this.qR.operate(this.qL.inverse());
-    }
-    const rL = qInitiatorDivResponder.exponentiate(this.s3);
-    const raProof = makeProofEqualDiscreteLogs(
-      this.getHashFunc(version),
-      this.g1,
-      qInitiatorDivResponder,
-      this.s3,
-      this.getRandomSecret(),
-      this.q
-    );
-    return [rL, raProof];
-  }
-
-  verifyRR(
-    version: BN,
-    rR: MultiplicativeGroup,
-    proof: ProofEqualDiscreteLogs,
-    isInitiator: boolean
-  ): boolean {
-    if (
-      this.qL === undefined ||
-      this.qR === undefined ||
-      this.g3R === undefined
-    ) {
-      throw new Error('require `qL`, `qR`, and `g3R` to be set');
-    }
-    let qInitiatorDivResponder: MultiplicativeGroup;
-    if (isInitiator) {
-      qInitiatorDivResponder = this.qL.operate(this.qR.inverse());
-    } else {
-      qInitiatorDivResponder = this.qR.operate(this.qL.inverse());
-    }
-    return verifyProofEqualDiscreteLogs(
-      this.getHashFunc(version),
-      this.g1,
-      qInitiatorDivResponder,
-      this.g3R,
-      rR,
-      proof
-    );
-  }
-
-  makeR(): MultiplicativeGroup {
-    if (this.rR === undefined || this.s3 === undefined) {
-      throw new Error('require `rR`, `s3` to be set');
-    }
-    return this.rR.exponentiate(this.s3);
-  }
-
-  getResult(isInitiator: boolean): boolean {
-    if (
-      this.r === undefined ||
-      this.pL === undefined ||
-      this.pR === undefined
-    ) {
-      throw new Error('require `r`, `pL`, and `pR` to be set');
-    }
-    let pInitiatorDivResponder: MultiplicativeGroup;
-    if (isInitiator) {
-      pInitiatorDivResponder = this.pL.operate(this.pR.inverse());
-    } else {
-      pInitiatorDivResponder = this.pR.operate(this.pL.inverse());
-    }
-    return this.r.equal(pInitiatorDivResponder);
-  }
 }
 
-class InvalidState extends Error {}
-class InvalidElement extends Error {}
-class InvalidProof extends Error {}
+class SMPError extends Error {}
+class InvalidState extends SMPError {}
+class InvalidElement extends SMPError {}
+class InvalidProof extends SMPError {}
+class StateMemberNotFound extends SMPError {}
 
 class SMPStateMachine {
   step: Step;
   state: SMPState;
 
-  constructor(readonly config: Config, readonly x: BN) {
+  // TODO: Use getter
+  result: boolean | undefined;
+
+  constructor(readonly x: BN, readonly config: Config = defaultConfig) {
     this.step = Step.SMPSTATE_EXPECT1;
-    this.state = new SMPState(config, x);
+    this.state = new SMPState(x, config);
     this.state.s2 = this.state.getRandomSecret();
     this.state.s3 = this.state.getRandomSecret();
+    this.result = undefined;
   }
 
   private verifyMultiplicativeGroup(g: MultiplicativeGroup): boolean {
@@ -418,6 +339,9 @@ class SMPStateMachine {
   }
 
   handleSMPMessage2(msg2: SMPMessage2): SMPMessage3 {
+    /*
+      Step 2: Alice receives bob's DH slices, P Q, and their proofs.
+    */
     if (this.step !== Step.SMPSTATE_EXPECT2) {
       throw new InvalidState();
     }
@@ -457,7 +381,7 @@ class SMPStateMachine {
     this.state.pL = pa;
     this.state.qL = qa;
     // Calculate `Ra`
-    const [ra, raProof] = this.state.makeRL(new BN(7), true);
+    const [ra, raProof] = this.makeRL(new BN(7), qa, msg2.qb);
     this.state.rL = ra;
 
     const msg3 = new SMPMessage3(pa, qa, paqaProof, ra, raProof);
@@ -468,6 +392,10 @@ class SMPStateMachine {
   }
 
   handleSMPMessage3(msg3: SMPMessage3): SMPMessage4 {
+    /*
+      Step 3: Bob receives `Pa`, `Qa`, `Ra` along with their proofs,
+      calculates `Rb` and `Rab` accordingly.
+    */
     if (this.step !== Step.SMPSTATE_EXPECT3) {
       throw new InvalidState();
     }
@@ -488,24 +416,38 @@ class SMPStateMachine {
     this.state.pR = msg3.pa;
     this.state.qR = msg3.qa;
     // `Ra`
-    if (!this.state.verifyRR(new BN(7), msg3.ra, msg3.raProof, false)) {
+    if (this.state.qL === undefined) {
+      throw new StateMemberNotFound();
+    }
+    if (
+      !this.verifyRR(new BN(7), msg3.ra, msg3.raProof, msg3.qa, this.state.qL)
+    ) {
       throw new InvalidProof();
     }
     // NOTE: `Ra` is Bob's `Rb`
     this.state.rR = msg3.ra;
     // Calculate `Rb`
-    const [rb, rbProof] = this.state.makeRL(new BN(8), false);
+    const [rb, rbProof] = this.makeRL(new BN(8), msg3.qa, this.state.qL);
     // NOTE: `Rb` is Bob's `Ra`
     this.state.rL = rb;
     // Calculate `Rab`
-    this.state.r = this.state.makeR();
+    this.state.r = this.makeRab();
     const msg4 = new SMPMessage4(rb, rbProof);
     // Advance the step
-    // TODO: probably we just set something as finished here?
     this.step = Step.SMPSTATE_EXPECT1;
+    // Set result
+    if (this.state.pL === undefined || this.state.pR === undefined) {
+      throw new StateMemberNotFound();
+    }
+    this.result = this.state.r.equal(
+      this.state.pR.operate(this.state.pL.inverse())
+    );
     return msg4;
   }
   handleSMPMessage4(msg4: SMPMessage4): void {
+    /*
+      Step 4: Alice receives `Rb` and calculate `Rab` as well.
+    */
     if (this.step !== Step.SMPSTATE_EXPECT4) {
       throw new InvalidState();
     }
@@ -513,16 +455,89 @@ class SMPStateMachine {
     if (!this.verifyMultiplicativeGroup(msg4.rb)) {
       throw new InvalidElement();
     }
-    if (!this.state.verifyRR(new BN(8), msg4.rb, msg4.rbProof, true)) {
+    if (this.state.qL === undefined || this.state.qR === undefined) {
+      throw new StateMemberNotFound();
+    }
+    if (
+      !this.verifyRR(
+        new BN(8),
+        msg4.rb,
+        msg4.rbProof,
+        this.state.qL,
+        this.state.qR
+      )
+    ) {
       throw new InvalidProof();
     }
     this.state.rR = msg4.rb;
     // Calculate `Rab`
-    this.state.r = this.state.makeR();
+    this.state.r = this.makeRab();
     // Advance the step
-    // TODO: probably we just set something as finished here?
     this.step = Step.SMPSTATE_EXPECT1;
+    // Set result
+    if (this.state.pL === undefined || this.state.pR === undefined) {
+      throw new StateMemberNotFound();
+    }
+    this.result = this.state.r.equal(
+      this.state.pL.operate(this.state.pR.inverse())
+    );
+  }
+
+  makeRL(
+    version: BN,
+    qa: MultiplicativeGroup,
+    qb: MultiplicativeGroup
+  ): [MultiplicativeGroup, ProofEqualDiscreteLogs] {
+    if (
+      this.state.qL === undefined ||
+      this.state.qR === undefined ||
+      this.state.s3 === undefined
+    ) {
+      throw new Error('require `qL`, `qR`, and `s3` to be set');
+    }
+    const qaDivQb = qa.operate(qb.inverse());
+    const rL = qaDivQb.exponentiate(this.state.s3);
+    const raProof = makeProofEqualDiscreteLogs(
+      this.state.getHashFunc(version),
+      this.state.g1,
+      qaDivQb,
+      this.state.s3,
+      this.state.getRandomSecret(),
+      this.state.q
+    );
+    return [rL, raProof];
+  }
+
+  verifyRR(
+    version: BN,
+    rR: MultiplicativeGroup,
+    proof: ProofEqualDiscreteLogs,
+    qa: MultiplicativeGroup,
+    qb: MultiplicativeGroup
+  ): boolean {
+    if (
+      this.state.qL === undefined ||
+      this.state.qR === undefined ||
+      this.state.g3R === undefined
+    ) {
+      throw new Error('require `qL`, `qR`, and `g3R` to be set');
+    }
+    return verifyProofEqualDiscreteLogs(
+      this.state.getHashFunc(version),
+      this.state.g1,
+      qa.operate(qb.inverse()),
+      this.state.g3R,
+      rR,
+      proof
+    );
+  }
+
+  makeRab(): MultiplicativeGroup {
+    if (this.state.rR === undefined || this.state.s3 === undefined) {
+      throw new Error('require `rR`, `s3` to be set');
+    }
+    return this.state.rR.exponentiate(this.state.s3);
   }
 }
 
-export { SMPState, SMPStateMachine };
+export { SMPStateMachine };
