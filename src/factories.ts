@@ -2,8 +2,8 @@ import { randomBytes } from 'crypto';
 
 import BN from 'bn.js';
 
-import { defaultConfig } from '../src/config';
-import { MultiplicativeGroup } from '../src/multiplicativeGroup';
+import { defaultConfig } from './config';
+import { MultiplicativeGroup } from './multiplicativeGroup';
 
 function secretFactory(): BN {
   const buf = randomBytes(defaultConfig.modulusSize);

@@ -2,9 +2,9 @@ import { randomBytes } from 'crypto';
 
 import BN from 'bn.js';
 
-import { MultiplicativeGroup } from '../src/multiplicativeGroup';
-import { Config, defaultConfig } from '../src/config';
-import { sha256ToInt } from '../src/hash';
+import { MultiplicativeGroup } from './multiplicativeGroup';
+import { Config, defaultConfig } from './config';
+import { sha256ToInt } from './hash';
 
 import {
   makeProofDiscreteLog,
@@ -17,7 +17,14 @@ import {
   ProofEqualDiscreteCoordinates,
   ProofEqualDiscreteLogs,
   THashFunc,
-} from '../src/proofs';
+} from './proofs';
+
+import {
+  InvalidState,
+  InvalidElement,
+  InvalidProof,
+  StateMemberNotFound,
+} from './exceptions';
 
 enum Step {
   SMPSTATE_EXPECT1,

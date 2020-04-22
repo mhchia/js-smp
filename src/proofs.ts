@@ -1,6 +1,6 @@
 import BN from 'bn.js';
 
-import { MultiplicativeGroup } from 'multiplicativeGroup';
+import { MultiplicativeGroup } from './multiplicativeGroup';
 
 type THashFunc = (...args: BN[]) => BN;
 
