@@ -18,6 +18,7 @@ function hash(...args: BN[]): BN {
   return sha256ToInt(defaultConfig.modulusSize, ...args);
 }
 
+// TODO: Add failure cases
 describe('ProofDiscreteLog', () => {
   test('make and verify', () => {
     const g = multiplicativeGroupFactory();
