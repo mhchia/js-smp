@@ -192,7 +192,6 @@ abstract class BaseSMPState implements ISMPState {
 }
 
 class SMPState1 extends BaseSMPState {
-  // Our secrets
   s2: BN;
   s3: BN;
 
@@ -475,17 +474,6 @@ class SMPStateFinished extends BaseSMPState {
   }
 }
 
-/*
-A            B
-SMPSTATE_EXPECT1, SMPSTATE_EXPECT1
-SMPSTATE_EXPECT2, SMPSTATE_EXPECT1
-SMPSTATE_EXPECT2, SMPSTATE_EXPECT3
-SMPSTATE_EXPECT4, SMPSTATE_EXPECT3
-SMPSTATE_EXPECT4, SMPSTATE_EXPECT1
-SMPSTATE_EXPECT1, SMPSTATE_EXPECT1
-
-*/
-
 class SMPStateMachine {
   state: ISMPState;
 
@@ -501,6 +489,7 @@ class SMPStateMachine {
   getResult(): boolean | null {
     return this.state.getResult();
   }
+  // TODO: Add `isFinished`?
 }
 
 export { SMPStateMachine };
