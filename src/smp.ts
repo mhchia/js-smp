@@ -19,17 +19,20 @@ import {
   THashFunc,
 } from './proofs';
 
-import {
-  InvalidElement,
-  InvalidProof,
-} from './exceptions';
+import { InvalidElement, InvalidProof } from './exceptions';
 
+import {
+  ISMPMessage,
+  SMPMessage1,
+  SMPMessage2,
+  SMPMessage3,
+  SMPMessage4,
+  SMPMessageEmpty,
+} from './msgs';
 
 interface ISMPState {
-  transit(msg: ISMPMessage | null): [ISMPState, ISMPMessage];
-  getResult(): boolean | undefined;
-  deserialize(str: string): ISMPMessage;
-  serialize(msg: ISMPMessage): string;
+  transit(msg: ISMPMessage | null): [ISMPState, ISMPMessage | null];
+  getResult(): boolean | null;
 }
 
 abstract class BaseSMPState implements ISMPState {
@@ -42,10 +45,7 @@ abstract class BaseSMPState implements ISMPState {
   readonly q: BN;
   readonly g1: MultiplicativeGroup;
 
-  constructor(
-    x: BN,
-    config: Config = defaultConfig,
-  ) {
+  constructor(x: BN, config: Config = defaultConfig) {
     this.x = x;
     this.q = config.q;
     this.g1 = config.g;
@@ -53,7 +53,7 @@ abstract class BaseSMPState implements ISMPState {
   }
 
   abstract transit(msg: ISMPMessage | null): [ISMPState, ISMPMessage];
-  abstract getResult(): boolean | undefined;
+  abstract getResult(): boolean | null;
 
   getHashFunc(this: BaseSMPState, version: BN): THashFunc {
     return (...args: BN[]): BN => {
@@ -109,7 +109,7 @@ abstract class BaseSMPState implements ISMPState {
   makePLQL(
     version: BN,
     g2: MultiplicativeGroup,
-    g3: MultiplicativeGroup,
+    g3: MultiplicativeGroup
   ): [MultiplicativeGroup, MultiplicativeGroup, ProofEqualDiscreteCoordinates] {
     const randomValue = this.getRandomSecret();
     const pL = g3.exponentiate(randomValue);
@@ -153,7 +153,7 @@ abstract class BaseSMPState implements ISMPState {
     version: BN,
     s3: BN,
     qa: MultiplicativeGroup,
-    qb: MultiplicativeGroup,
+    qb: MultiplicativeGroup
   ): [MultiplicativeGroup, ProofEqualDiscreteLogs] {
     const qaDivQb = qa.operate(qb.inverse());
     const rL = qaDivQb.exponentiate(s3);
@@ -201,8 +201,8 @@ class SMPState1 extends BaseSMPState {
     this.s2 = this.getRandomSecret();
     this.s3 = this.getRandomSecret();
   }
-  getResult(): boolean | undefined {
-    return undefined;
+  getResult(): boolean | null {
+    return null;
   }
   transit(msg: SMPMessage1 | null): [ISMPState, SMPMessage1 | SMPMessage2] {
     if (msg === null) {
@@ -210,7 +210,14 @@ class SMPState1 extends BaseSMPState {
       const [g2a, g2aProof] = this.makeDHPubkey(new BN(1), this.s2);
       const [g3a, g3aProof] = this.makeDHPubkey(new BN(2), this.s3);
       const msg = new SMPMessage1(g2a, g2aProof, g3a, g3aProof);
-      const state = new SMPState2(this.x, this.config, this.s2, this.s3, g2a, g3a);
+      const state = new SMPState2(
+        this.x,
+        this.config,
+        this.s2,
+        this.s3,
+        g2a,
+        g3a
+      );
       return [state, msg];
     } else {
       /*
@@ -248,7 +255,18 @@ class SMPState1 extends BaseSMPState {
         pbqbProof
       );
       const state = new SMPState3(
-        this.x, this.config, this.s2, this.s3, g2b, g3b, g2, g3, msg.g2a, msg.g3a, pb, qb
+        this.x,
+        this.config,
+        this.s2,
+        this.s3,
+        g2b,
+        g3b,
+        g2,
+        g3,
+        msg.g2a,
+        msg.g3a,
+        pb,
+        qb
       );
       return [state, msg2];
     }
@@ -262,12 +280,12 @@ class SMPState2 extends BaseSMPState {
     readonly s2: BN,
     readonly s3: BN,
     readonly g2L: MultiplicativeGroup,
-    readonly g3L: MultiplicativeGroup,
+    readonly g3L: MultiplicativeGroup
   ) {
     super(x, config);
   }
-  getResult(): boolean | undefined {
-    return undefined;
+  getResult(): boolean | null {
+    return null;
   }
 
   transit(msg: SMPMessage2): [ISMPState, SMPMessage3] {
@@ -292,7 +310,9 @@ class SMPState2 extends BaseSMPState {
     // Perform DH
     const g2 = this.makeDHSharedSecret(msg.g2b, this.s2);
     const g3 = this.makeDHSharedSecret(msg.g3b, this.s3);
-    if (!this.verifyPRQRProof(new BN(5), g2, g3, msg.pb, msg.qb, msg.pbqbProof)) {
+    if (
+      !this.verifyPRQRProof(new BN(5), g2, g3, msg.pb, msg.qb, msg.pbqbProof)
+    ) {
       throw new InvalidProof();
     }
     // Calculate `Pa` and `Qa`
@@ -303,8 +323,21 @@ class SMPState2 extends BaseSMPState {
     const msg3 = new SMPMessage3(pa, qa, paqaProof, ra, raProof);
     // Advance the step
     const state = new SMPState4(
-      this.x, this.config,this.s2,this.s3, this.g2L, this.g3L, msg.g2b, msg.g3b, g2, g3,
-      pa,qa,msg.pb,msg.pb, ra
+      this.x,
+      this.config,
+      this.s2,
+      this.s3,
+      this.g2L,
+      this.g3L,
+      msg.g2b,
+      msg.g3b,
+      g2,
+      g3,
+      pa,
+      qa,
+      msg.pb,
+      msg.qb,
+      ra
     );
 
     return [state, msg3];
@@ -324,12 +357,12 @@ class SMPState3 extends BaseSMPState {
     readonly g2R: MultiplicativeGroup,
     readonly g3R: MultiplicativeGroup,
     readonly pL: MultiplicativeGroup,
-    readonly qL: MultiplicativeGroup,
+    readonly qL: MultiplicativeGroup
   ) {
     super(x, config);
   }
-  getResult(): boolean | undefined {
-    return undefined;
+  getResult(): boolean | null {
+    return null;
   }
   transit(msg: SMPMessage3): [ISMPState, SMPMessage4] {
     /*
@@ -344,7 +377,16 @@ class SMPState3 extends BaseSMPState {
     ) {
       throw new InvalidElement();
     }
-    if (!this.verifyPRQRProof(new BN(6), this.g2, this.g3, msg.pa, msg.qa, msg.paqaProof)) {
+    if (
+      !this.verifyPRQRProof(
+        new BN(6),
+        this.g2,
+        this.g3,
+        msg.pa,
+        msg.qa,
+        msg.paqaProof
+      )
+    ) {
       throw new InvalidProof();
     }
     // `Ra`
@@ -353,12 +395,16 @@ class SMPState3 extends BaseSMPState {
     ) {
       throw new InvalidProof();
     }
-    // Calculate `Rb`
     const [rb, rbProof] = this.makeRL(new BN(8), this.s3, msg.qa, this.qL);
     const msg4 = new SMPMessage4(rb, rbProof);
-    // Calculate `Rab`
     const rab = this.makeRab(this.s3, msg.ra);
-    const state = new SMPStateFinished(this.x, this.config, msg.pa, this.pL, rab);
+    const state = new SMPStateFinished(
+      this.x,
+      this.config,
+      msg.pa,
+      this.pL,
+      rab
+    );
     return [state, msg4];
   }
 }
@@ -379,12 +425,12 @@ class SMPState4 extends BaseSMPState {
     readonly qL: MultiplicativeGroup,
     readonly pR: MultiplicativeGroup,
     readonly qR: MultiplicativeGroup,
-    readonly rL: MultiplicativeGroup,
+    readonly rL: MultiplicativeGroup
   ) {
     super(x, config);
   }
-  getResult(): boolean | undefined {
-    return undefined;
+  getResult(): boolean | null {
+    return null;
   }
   transit(msg: SMPMessage4): [ISMPState, ISMPMessage] {
     /*
@@ -395,20 +441,18 @@ class SMPState4 extends BaseSMPState {
       throw new InvalidElement();
     }
     if (
-      !this.verifyRR(
-        new BN(8),
-        this.g3R,
-        msg.rb,
-        msg.rbProof,
-        this.qL,
-        this.qR
-      )
+      !this.verifyRR(new BN(8), this.g3R, msg.rb, msg.rbProof, this.qL, this.qR)
     ) {
       throw new InvalidProof();
     }
-    // Calculate `Rab`
     const rab = this.makeRab(this.s3, msg.rb);
-    const state = new SMPStateFinished(this.x, this.config, this.pL, this.pR, rab);
+    const state = new SMPStateFinished(
+      this.x,
+      this.config,
+      this.pL,
+      this.pR,
+      rab
+    );
     return [state, new SMPMessageEmpty()];
   }
 }
@@ -419,20 +463,17 @@ class SMPStateFinished extends BaseSMPState {
     config: Config,
     readonly pa: MultiplicativeGroup,
     readonly pb: MultiplicativeGroup,
-    readonly rab: MultiplicativeGroup,
+    readonly rab: MultiplicativeGroup
   ) {
     super(x, config);
   }
   getResult(): boolean {
-    return this.rab.equal(
-      this.pa.operate(this.pb.inverse())
-    );
+    return this.rab.equal(this.pa.operate(this.pb.inverse()));
   }
   transit(_: ISMPMessage): [ISMPState, ISMPMessage] {
-    throw new Error("finished");
+    throw new Error('finished');
   }
 }
-
 
 /*
 A            B
@@ -445,7 +486,6 @@ SMPSTATE_EXPECT1, SMPSTATE_EXPECT1
 
 */
 
-
 class SMPStateMachine {
   state: ISMPState;
 
@@ -453,12 +493,12 @@ class SMPStateMachine {
     this.state = new SMPState1(x, config);
   }
 
-  transit(msg: ISMPMessage | null): ISMPMessage {
+  transit(msg: ISMPMessage | null): ISMPMessage | null {
     const [newState, retMsg] = this.state.transit(msg);
     this.state = newState;
     return retMsg;
   }
-  getResult(): boolean | undefined {
+  getResult(): boolean | null {
     return this.state.getResult();
   }
 }
