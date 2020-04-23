@@ -20,368 +20,42 @@ import {
 } from './proofs';
 
 import {
-  InvalidState,
   InvalidElement,
   InvalidProof,
-  StateMemberNotFound,
 } from './exceptions';
 
-enum Step {
-  SMPSTATE_EXPECT1,
-  SMPSTATE_EXPECT2,
-  SMPSTATE_EXPECT3,
-  SMPSTATE_EXPECT4,
+
+interface ISMPState {
+  transit(msg: ISMPMessage | null): [ISMPState, ISMPMessage];
+  getResult(): boolean | undefined;
+  deserialize(str: string): ISMPMessage;
+  serialize(msg: ISMPMessage): string;
 }
 
-interface ISMPMessage {
-  serialize(...args: any[]): any;
-  deserialize(...args: any[]): any;
-}
-
-class SMPMessage1 implements ISMPMessage {
-  constructor(
-    readonly g2a: MultiplicativeGroup,
-    readonly g2aProof: ProofDiscreteLog,
-    readonly g3a: MultiplicativeGroup,
-    readonly g3aProof: ProofDiscreteLog
-  ) {}
-  serialize(...args: any[]): any {
-    throw new Error(`Not implemented yet ${args}`);
-  }
-  deserialize(...args: any[]): any {
-    throw new Error(`Not implemented yet ${args}`);
-  }
-}
-
-class SMPMessage2 implements ISMPMessage {
-  constructor(
-    readonly g2b: MultiplicativeGroup,
-    readonly g2bProof: ProofDiscreteLog,
-    readonly g3b: MultiplicativeGroup,
-    readonly g3bProof: ProofDiscreteLog,
-    readonly pb: MultiplicativeGroup,
-    readonly qb: MultiplicativeGroup,
-    readonly pbqbProof: ProofEqualDiscreteCoordinates
-  ) {}
-  serialize(...args: any[]): any {
-    throw new Error(`Not implemented yet ${args}`);
-  }
-  deserialize(...args: any[]): any {
-    throw new Error(`Not implemented yet ${args}`);
-  }
-}
-
-class SMPMessage3 implements ISMPMessage {
-  constructor(
-    readonly pa: MultiplicativeGroup,
-    readonly qa: MultiplicativeGroup,
-    readonly paqaProof: ProofEqualDiscreteCoordinates,
-    readonly ra: MultiplicativeGroup,
-    readonly raProof: ProofEqualDiscreteLogs
-  ) {}
-  serialize(...args: any[]): any {
-    throw new Error(`Not implemented yet ${args}`);
-  }
-  deserialize(...args: any[]): any {
-    throw new Error(`Not implemented yet ${args}`);
-  }
-}
-
-class SMPMessage4 implements ISMPMessage {
-  constructor(
-    readonly rb: MultiplicativeGroup,
-    readonly rbProof: ProofEqualDiscreteLogs
-  ) {}
-  serialize(...args: any[]): any {
-    throw new Error(`Not implemented yet ${args}`);
-  }
-  deserialize(...args: any[]): any {
-    throw new Error(`Not implemented yet ${args}`);
-  }
-}
-
-class SMPState {
-  // SMP secret
-  x: BN;
-
-  // Public
-  g1: MultiplicativeGroup;
-  q: BN;
-
-  // Our secrets
-  s2?: BN;
-  s3?: BN;
-
-  // Ours(L means local) on the wire
-  g2L?: MultiplicativeGroup;
-  g3L?: MultiplicativeGroup;
-  pL?: MultiplicativeGroup;
-  qL?: MultiplicativeGroup;
-  rL?: MultiplicativeGroup;
-
-  // Theirs(R means remote) on the wire
-  g2R?: MultiplicativeGroup;
-  g3R?: MultiplicativeGroup;
-  pR?: MultiplicativeGroup;
-  qR?: MultiplicativeGroup;
-  rR?: MultiplicativeGroup;
-
-  // DH shared
-  r?: MultiplicativeGroup;
-  g2?: MultiplicativeGroup;
-  g3?: MultiplicativeGroup;
-
-  constructor(x: BN, g1: MultiplicativeGroup, q: BN) {
-    this.x = x;
-    this.g1 = g1;
-    this.q = q;
-  }
-}
-
-// TODO: Refactor
-class SMPStateMachine {
+abstract class BaseSMPState implements ISMPState {
   readonly config: Config;
 
-  step: Step;
-  state: SMPState;
+  // SMP secret
+  readonly x: BN;
 
-  // TODO: Use getter
-  result: boolean | undefined;
+  // Public
+  readonly q: BN;
+  readonly g1: MultiplicativeGroup;
 
-  constructor(x: BN, config: Config = defaultConfig) {
+  constructor(
+    x: BN,
+    config: Config = defaultConfig,
+  ) {
+    this.x = x;
+    this.q = config.q;
+    this.g1 = config.g;
     this.config = config;
-    this.step = Step.SMPSTATE_EXPECT1;
-    this.state = new SMPState(x, config.g, config.q);
-    this.state.s2 = this.getRandomSecret();
-    this.state.s3 = this.getRandomSecret();
-    this.result = undefined;
   }
 
-  beginSMP(): SMPMessage1 {
-    /* Step 0: Alice initaites smp, sending `g2a`, `g3a` to Bob. */
-    if (this.step !== Step.SMPSTATE_EXPECT1) {
-      throw new InvalidState();
-    }
-    if (this.state.s2 === undefined || this.state.s3 === undefined) {
-      throw new StateMemberNotFound();
-    }
-    const [g2a, g2aProof] = this.makeDHPubkey(new BN(1), this.state.s2);
-    const [g3a, g3aProof] = this.makeDHPubkey(new BN(2), this.state.s3);
-    this.state.g2L = g2a;
-    this.state.g3L = g3a;
-    const msg1 = new SMPMessage1(g2a, g2aProof, g3a, g3aProof);
-    // Advance the step
-    this.step = Step.SMPSTATE_EXPECT2;
-    return msg1;
-  }
+  abstract transit(msg: ISMPMessage | null): [ISMPState, ISMPMessage];
+  abstract getResult(): boolean | undefined;
 
-  handleSMPMessage1(msg1: SMPMessage1): SMPMessage2 {
-    /*
-      Step 1: Bob verifies received data, makes its slice of DH, and sends
-      `g2b`, `g3b`, `Pb`, `Qb` to Alice.
-    */
-    if (this.step !== Step.SMPSTATE_EXPECT1) {
-      throw new InvalidState();
-    }
-    // Verify pubkey's value
-    if (
-      !this.verifyMultiplicativeGroup(msg1.g2a) ||
-      !this.verifyMultiplicativeGroup(msg1.g3a)
-    ) {
-      throw new InvalidElement();
-    }
-    // Verify the proofs
-    if (!this.verifyDHPubkey(new BN(1), msg1.g2a, msg1.g2aProof)) {
-      throw new InvalidProof();
-    }
-    if (!this.verifyDHPubkey(new BN(2), msg1.g3a, msg1.g3aProof)) {
-      throw new InvalidProof();
-    }
-    // Save the slices
-    this.state.g2R = msg1.g2a;
-    this.state.g3R = msg1.g3a;
-    // Calculate its DH slice
-    if (this.state.s2 === undefined || this.state.s3 === undefined) {
-      throw new StateMemberNotFound();
-    }
-    const [g2b, g2bProof] = this.makeDHPubkey(new BN(3), this.state.s2);
-    const [g3b, g3bProof] = this.makeDHPubkey(new BN(4), this.state.s3);
-    this.state.g2L = g2b;
-    this.state.g3L = g3b;
-    // Perform DH
-    if (this.state.s2 === undefined || this.state.s3 === undefined) {
-      throw new Error('secrets s2 and s3 should have been created');
-    }
-    this.state.g2 = this.makeDHSharedSecret(msg1.g2a, this.state.s2);
-    this.state.g3 = this.makeDHSharedSecret(msg1.g3a, this.state.s3);
-    // Make `Pb` and `Qb`
-    const [pb, qb, pbqbProof] = this.makePLQL(new BN(5));
-    this.state.pL = pb;
-    this.state.qL = qb;
-
-    const msg2 = new SMPMessage2(
-      g2b,
-      g2bProof,
-      g3b,
-      g3bProof,
-      pb,
-      qb,
-      pbqbProof
-    );
-    // Advance the step
-    this.step = Step.SMPSTATE_EXPECT3;
-
-    return msg2;
-  }
-
-  handleSMPMessage2(msg2: SMPMessage2): SMPMessage3 {
-    /*
-      Step 2: Alice receives bob's DH slices, P Q, and their proofs.
-    */
-    if (this.step !== Step.SMPSTATE_EXPECT2) {
-      throw new InvalidState();
-    }
-    // Verify
-    if (
-      !this.verifyMultiplicativeGroup(msg2.g2b) ||
-      !this.verifyMultiplicativeGroup(msg2.g3b) ||
-      !this.verifyMultiplicativeGroup(msg2.pb) ||
-      !this.verifyMultiplicativeGroup(msg2.qb)
-    ) {
-      throw new InvalidElement();
-    }
-    if (!this.verifyDHPubkey(new BN(3), msg2.g2b, msg2.g2bProof)) {
-      throw new InvalidProof();
-    }
-    if (!this.verifyDHPubkey(new BN(4), msg2.g3b, msg2.g3bProof)) {
-      throw new InvalidProof();
-    }
-    // Perform DH
-    if (this.state.s2 === undefined || this.state.s3 === undefined) {
-      throw new Error('secrets s2 and s3 should have been created');
-    }
-    this.state.g2 = this.makeDHSharedSecret(msg2.g2b, this.state.s2);
-    this.state.g3 = this.makeDHSharedSecret(msg2.g3b, this.state.s3);
-    if (!this.verifyPRQRProof(new BN(5), msg2.pb, msg2.qb, msg2.pbqbProof)) {
-      throw new InvalidProof();
-    }
-    // Save DH slices
-    this.state.g2R = msg2.g2b;
-    this.state.g3R = msg2.g3b;
-    this.state.pR = msg2.pb;
-    this.state.qR = msg2.qb;
-    // Calculate `Pa` and `Qa`
-    const [pa, qa, paqaProof] = this.makePLQL(new BN(6));
-    this.state.pL = pa;
-    this.state.qL = qa;
-    // Calculate `Ra`
-    const [ra, raProof] = this.makeRL(new BN(7), qa, msg2.qb);
-    this.state.rL = ra;
-
-    const msg3 = new SMPMessage3(pa, qa, paqaProof, ra, raProof);
-    // Advance the step
-    this.step = Step.SMPSTATE_EXPECT4;
-
-    return msg3;
-  }
-
-  handleSMPMessage3(msg3: SMPMessage3): SMPMessage4 {
-    /*
-      Step 3: Bob receives `Pa`, `Qa`, `Ra` along with their proofs,
-      calculates `Rb` and `Rab` accordingly.
-    */
-    if (this.step !== Step.SMPSTATE_EXPECT3) {
-      throw new InvalidState();
-    }
-    // Verify
-    if (
-      !this.verifyMultiplicativeGroup(msg3.pa) ||
-      !this.verifyMultiplicativeGroup(msg3.qa) ||
-      !this.verifyMultiplicativeGroup(msg3.ra)
-    ) {
-      throw new InvalidElement();
-    }
-    if (!this.verifyPRQRProof(new BN(6), msg3.pa, msg3.qa, msg3.paqaProof)) {
-      throw new InvalidProof();
-    }
-    // NOTE: `Pa` is Bob's `Pb`
-    this.state.pR = msg3.pa;
-    this.state.qR = msg3.qa;
-    // `Ra`
-    if (this.state.qL === undefined) {
-      throw new StateMemberNotFound();
-    }
-    if (
-      !this.verifyRR(new BN(7), msg3.ra, msg3.raProof, msg3.qa, this.state.qL)
-    ) {
-      throw new InvalidProof();
-    }
-    // NOTE: `Ra` is Bob's `Rb`
-    this.state.rR = msg3.ra;
-    // Calculate `Rb`
-    const [rb, rbProof] = this.makeRL(new BN(8), msg3.qa, this.state.qL);
-    // NOTE: `Rb` is Bob's `Ra`
-    this.state.rL = rb;
-    // Calculate `Rab`
-    this.state.r = this.makeRab();
-    const msg4 = new SMPMessage4(rb, rbProof);
-    // Advance the step
-    this.step = Step.SMPSTATE_EXPECT1;
-    // Set result
-    if (this.state.pL === undefined || this.state.pR === undefined) {
-      throw new StateMemberNotFound();
-    }
-    this.result = this.state.r.equal(
-      this.state.pR.operate(this.state.pL.inverse())
-    );
-    return msg4;
-  }
-
-  handleSMPMessage4(msg4: SMPMessage4): void {
-    /*
-      Step 4: Alice receives `Rb` and calculate `Rab` as well.
-    */
-    if (this.step !== Step.SMPSTATE_EXPECT4) {
-      throw new InvalidState();
-    }
-    // Verify
-    if (!this.verifyMultiplicativeGroup(msg4.rb)) {
-      throw new InvalidElement();
-    }
-    if (this.state.qL === undefined || this.state.qR === undefined) {
-      throw new StateMemberNotFound();
-    }
-    if (
-      !this.verifyRR(
-        new BN(8),
-        msg4.rb,
-        msg4.rbProof,
-        this.state.qL,
-        this.state.qR
-      )
-    ) {
-      throw new InvalidProof();
-    }
-    this.state.rR = msg4.rb;
-    // Calculate `Rab`
-    this.state.r = this.makeRab();
-    // Advance the step
-    this.step = Step.SMPSTATE_EXPECT1;
-    // Set result
-    if (this.state.pL === undefined || this.state.pR === undefined) {
-      throw new StateMemberNotFound();
-    }
-    this.result = this.state.r.equal(
-      this.state.pL.operate(this.state.pR.inverse())
-    );
-  }
-
-  private verifyMultiplicativeGroup(g: MultiplicativeGroup): boolean {
-    // 2 <= g.value <= (modulus - 2)
-    return g.value.gtn(1) && g.value.lt(this.config.modulus.subn(1));
-  }
-
-  getHashFunc(this: SMPStateMachine, version: BN): THashFunc {
+  getHashFunc(this: BaseSMPState, version: BN): THashFunc {
     return (...args: BN[]): BN => {
       return sha256ToInt(this.config.modulusSize, version, ...args);
     };
@@ -396,13 +70,13 @@ class SMPStateMachine {
     version: BN,
     secretKey: BN
   ): [MultiplicativeGroup, ProofDiscreteLog] {
-    const pubkey = this.state.g1.exponentiate(secretKey);
+    const pubkey = this.g1.exponentiate(secretKey);
     const proof = makeProofDiscreteLog(
       this.getHashFunc(version),
-      this.state.g1,
+      this.g1,
       secretKey,
       this.getRandomSecret(),
-      this.state.q
+      this.q
     );
     return [pubkey, proof];
   }
@@ -415,7 +89,7 @@ class SMPStateMachine {
     return verifyProofDiscreteLog(
       this.getHashFunc(version),
       proof,
-      this.state.g1,
+      this.g1,
       pubkey
     );
   }
@@ -427,45 +101,48 @@ class SMPStateMachine {
     return g.exponentiate(secretKey);
   }
 
+  verifyMultiplicativeGroup(g: MultiplicativeGroup): boolean {
+    // 2 <= g.value <= (modulus - 2)
+    return g.value.gtn(1) && g.value.lt(this.config.modulus.subn(1));
+  }
+
   makePLQL(
-    version: BN
+    version: BN,
+    g2: MultiplicativeGroup,
+    g3: MultiplicativeGroup,
   ): [MultiplicativeGroup, MultiplicativeGroup, ProofEqualDiscreteCoordinates] {
-    if (this.state.g2 === undefined || this.state.g3 === undefined) {
-      throw new Error('require `g2` and `g3` to be set');
-    }
     const randomValue = this.getRandomSecret();
-    const pL = this.state.g3.exponentiate(randomValue);
-    const qL = this.state.g1
+    const pL = g3.exponentiate(randomValue);
+    const qL = this.g1
       .exponentiate(randomValue)
-      .operate(this.state.g2.exponentiate(this.state.x));
+      .operate(g2.exponentiate(this.x));
     const proof = makeProofEqualDiscreteCoordinates(
       this.getHashFunc(version),
-      this.state.g3,
-      this.state.g1,
-      this.state.g2,
+      g3,
+      this.g1,
+      g2,
       randomValue,
-      this.state.x,
+      this.x,
       this.getRandomSecret(),
       this.getRandomSecret(),
-      this.state.q
+      this.q
     );
     return [pL, qL, proof];
   }
 
   verifyPRQRProof(
     version: BN,
+    g2: MultiplicativeGroup,
+    g3: MultiplicativeGroup,
     pR: MultiplicativeGroup,
     qR: MultiplicativeGroup,
     proof: ProofEqualDiscreteCoordinates
   ): boolean {
-    if (this.state.g2 === undefined || this.state.g3 === undefined) {
-      throw new Error('require `g2` and `g3` to be set');
-    }
     return verifyProofEqualDiscreteCoordinates(
       this.getHashFunc(version),
-      this.state.g3,
-      this.state.g1,
-      this.state.g2,
+      g3,
+      this.g1,
+      g2,
       pR,
       qR,
       proof
@@ -474,58 +151,315 @@ class SMPStateMachine {
 
   makeRL(
     version: BN,
+    s3: BN,
     qa: MultiplicativeGroup,
-    qb: MultiplicativeGroup
+    qb: MultiplicativeGroup,
   ): [MultiplicativeGroup, ProofEqualDiscreteLogs] {
-    if (
-      this.state.qL === undefined ||
-      this.state.qR === undefined ||
-      this.state.s3 === undefined
-    ) {
-      throw new Error('require `qL`, `qR`, and `s3` to be set');
-    }
     const qaDivQb = qa.operate(qb.inverse());
-    const rL = qaDivQb.exponentiate(this.state.s3);
+    const rL = qaDivQb.exponentiate(s3);
     const raProof = makeProofEqualDiscreteLogs(
       this.getHashFunc(version),
-      this.state.g1,
+      this.g1,
       qaDivQb,
-      this.state.s3,
+      s3,
       this.getRandomSecret(),
-      this.state.q
+      this.q
     );
     return [rL, raProof];
   }
 
   verifyRR(
     version: BN,
+    g3R: MultiplicativeGroup,
     rR: MultiplicativeGroup,
     proof: ProofEqualDiscreteLogs,
     qa: MultiplicativeGroup,
     qb: MultiplicativeGroup
   ): boolean {
-    if (
-      this.state.qL === undefined ||
-      this.state.qR === undefined ||
-      this.state.g3R === undefined
-    ) {
-      throw new Error('require `qL`, `qR`, and `g3R` to be set');
-    }
     return verifyProofEqualDiscreteLogs(
       this.getHashFunc(version),
-      this.state.g1,
+      this.g1,
       qa.operate(qb.inverse()),
-      this.state.g3R,
+      g3R,
       rR,
       proof
     );
   }
 
-  makeRab(): MultiplicativeGroup {
-    if (this.state.rR === undefined || this.state.s3 === undefined) {
-      throw new Error('require `rR`, `s3` to be set');
+  makeRab(s3: BN, rR: MultiplicativeGroup): MultiplicativeGroup {
+    return rR.exponentiate(s3);
+  }
+}
+
+class SMPState1 extends BaseSMPState {
+  // Our secrets
+  s2: BN;
+  s3: BN;
+
+  constructor(x: BN, config: Config) {
+    super(x, config);
+    this.s2 = this.getRandomSecret();
+    this.s3 = this.getRandomSecret();
+  }
+  getResult(): boolean | undefined {
+    return undefined;
+  }
+  transit(msg: SMPMessage1 | null): [ISMPState, SMPMessage1 | SMPMessage2] {
+    if (msg === null) {
+      /* Step 0: Alice initaites smp, sending `g2a`, `g3a` to Bob. */
+      const [g2a, g2aProof] = this.makeDHPubkey(new BN(1), this.s2);
+      const [g3a, g3aProof] = this.makeDHPubkey(new BN(2), this.s3);
+      const msg = new SMPMessage1(g2a, g2aProof, g3a, g3aProof);
+      const state = new SMPState2(this.x, this.config, this.s2, this.s3, g2a, g3a);
+      return [state, msg];
+    } else {
+      /*
+        Step 1: Bob verifies received data, makes its slice of DH, and sends
+        `g2b`, `g3b`, `Pb`, `Qb` to Alice.
+      */
+      // Verify pubkey's value
+      if (
+        !this.verifyMultiplicativeGroup(msg.g2a) ||
+        !this.verifyMultiplicativeGroup(msg.g3a)
+      ) {
+        throw new InvalidElement();
+      }
+      // Verify the proofs
+      if (!this.verifyDHPubkey(new BN(1), msg.g2a, msg.g2aProof)) {
+        throw new InvalidProof();
+      }
+      if (!this.verifyDHPubkey(new BN(2), msg.g3a, msg.g3aProof)) {
+        throw new InvalidProof();
+      }
+      const [g2b, g2bProof] = this.makeDHPubkey(new BN(3), this.s2);
+      const [g3b, g3bProof] = this.makeDHPubkey(new BN(4), this.s3);
+      const g2 = this.makeDHSharedSecret(msg.g2a, this.s2);
+      const g3 = this.makeDHSharedSecret(msg.g3a, this.s3);
+      // Make `Pb` and `Qb`
+      const [pb, qb, pbqbProof] = this.makePLQL(new BN(5), g2, g3);
+
+      const msg2 = new SMPMessage2(
+        g2b,
+        g2bProof,
+        g3b,
+        g3bProof,
+        pb,
+        qb,
+        pbqbProof
+      );
+      const state = new SMPState3(
+        this.x, this.config, this.s2, this.s3, g2b, g3b, g2, g3, msg.g2a, msg.g3a, pb, qb
+      );
+      return [state, msg2];
     }
-    return this.state.rR.exponentiate(this.state.s3);
+  }
+}
+
+class SMPState2 extends BaseSMPState {
+  constructor(
+    x: BN,
+    config: Config,
+    readonly s2: BN,
+    readonly s3: BN,
+    readonly g2L: MultiplicativeGroup,
+    readonly g3L: MultiplicativeGroup,
+  ) {
+    super(x, config);
+  }
+  getResult(): boolean | undefined {
+    return undefined;
+  }
+
+  transit(msg: SMPMessage2): [ISMPState, SMPMessage3] {
+    /*
+      Step 2: Alice receives bob's DH slices, P Q, and their proofs.
+    */
+    // Verify
+    if (
+      !this.verifyMultiplicativeGroup(msg.g2b) ||
+      !this.verifyMultiplicativeGroup(msg.g3b) ||
+      !this.verifyMultiplicativeGroup(msg.pb) ||
+      !this.verifyMultiplicativeGroup(msg.qb)
+    ) {
+      throw new InvalidElement();
+    }
+    if (!this.verifyDHPubkey(new BN(3), msg.g2b, msg.g2bProof)) {
+      throw new InvalidProof();
+    }
+    if (!this.verifyDHPubkey(new BN(4), msg.g3b, msg.g3bProof)) {
+      throw new InvalidProof();
+    }
+    // Perform DH
+    const g2 = this.makeDHSharedSecret(msg.g2b, this.s2);
+    const g3 = this.makeDHSharedSecret(msg.g3b, this.s3);
+    if (!this.verifyPRQRProof(new BN(5), g2, g3, msg.pb, msg.qb, msg.pbqbProof)) {
+      throw new InvalidProof();
+    }
+    // Calculate `Pa` and `Qa`
+    const [pa, qa, paqaProof] = this.makePLQL(new BN(6), g2, g3);
+    // Calculate `Ra`
+    const [ra, raProof] = this.makeRL(new BN(7), this.s3, qa, msg.qb);
+
+    const msg3 = new SMPMessage3(pa, qa, paqaProof, ra, raProof);
+    // Advance the step
+    const state = new SMPState4(
+      this.x, this.config,this.s2,this.s3, this.g2L, this.g3L, msg.g2b, msg.g3b, g2, g3,
+      pa,qa,msg.pb,msg.pb, ra
+    );
+
+    return [state, msg3];
+  }
+}
+
+class SMPState3 extends BaseSMPState {
+  constructor(
+    x: BN,
+    config: Config,
+    readonly s2: BN,
+    readonly s3: BN,
+    readonly g2L: MultiplicativeGroup,
+    readonly g3L: MultiplicativeGroup,
+    readonly g2: MultiplicativeGroup,
+    readonly g3: MultiplicativeGroup,
+    readonly g2R: MultiplicativeGroup,
+    readonly g3R: MultiplicativeGroup,
+    readonly pL: MultiplicativeGroup,
+    readonly qL: MultiplicativeGroup,
+  ) {
+    super(x, config);
+  }
+  getResult(): boolean | undefined {
+    return undefined;
+  }
+  transit(msg: SMPMessage3): [ISMPState, SMPMessage4] {
+    /*
+      Step 3: Bob receives `Pa`, `Qa`, `Ra` along with their proofs,
+      calculates `Rb` and `Rab` accordingly.
+    */
+    // Verify
+    if (
+      !this.verifyMultiplicativeGroup(msg.pa) ||
+      !this.verifyMultiplicativeGroup(msg.qa) ||
+      !this.verifyMultiplicativeGroup(msg.ra)
+    ) {
+      throw new InvalidElement();
+    }
+    if (!this.verifyPRQRProof(new BN(6), this.g2, this.g3, msg.pa, msg.qa, msg.paqaProof)) {
+      throw new InvalidProof();
+    }
+    // `Ra`
+    if (
+      !this.verifyRR(new BN(7), this.g3R, msg.ra, msg.raProof, msg.qa, this.qL)
+    ) {
+      throw new InvalidProof();
+    }
+    // Calculate `Rb`
+    const [rb, rbProof] = this.makeRL(new BN(8), this.s3, msg.qa, this.qL);
+    const msg4 = new SMPMessage4(rb, rbProof);
+    // Calculate `Rab`
+    const rab = this.makeRab(this.s3, msg.ra);
+    const state = new SMPStateFinished(this.x, this.config, msg.pa, this.pL, rab);
+    return [state, msg4];
+  }
+}
+
+class SMPState4 extends BaseSMPState {
+  constructor(
+    x: BN,
+    config: Config,
+    readonly s2: BN,
+    readonly s3: BN,
+    readonly g2L: MultiplicativeGroup,
+    readonly g3L: MultiplicativeGroup,
+    readonly g2R: MultiplicativeGroup,
+    readonly g3R: MultiplicativeGroup,
+    readonly g2: MultiplicativeGroup,
+    readonly g3: MultiplicativeGroup,
+    readonly pL: MultiplicativeGroup,
+    readonly qL: MultiplicativeGroup,
+    readonly pR: MultiplicativeGroup,
+    readonly qR: MultiplicativeGroup,
+    readonly rL: MultiplicativeGroup,
+  ) {
+    super(x, config);
+  }
+  getResult(): boolean | undefined {
+    return undefined;
+  }
+  transit(msg: SMPMessage4): [ISMPState, ISMPMessage] {
+    /*
+      Step 4: Alice receives `Rb` and calculate `Rab` as well.
+    */
+    // Verify
+    if (!this.verifyMultiplicativeGroup(msg.rb)) {
+      throw new InvalidElement();
+    }
+    if (
+      !this.verifyRR(
+        new BN(8),
+        this.g3R,
+        msg.rb,
+        msg.rbProof,
+        this.qL,
+        this.qR
+      )
+    ) {
+      throw new InvalidProof();
+    }
+    // Calculate `Rab`
+    const rab = this.makeRab(this.s3, msg.rb);
+    const state = new SMPStateFinished(this.x, this.config, this.pL, this.pR, rab);
+    return [state, new SMPMessageEmpty()];
+  }
+}
+
+class SMPStateFinished extends BaseSMPState {
+  constructor(
+    x: BN,
+    config: Config,
+    readonly pa: MultiplicativeGroup,
+    readonly pb: MultiplicativeGroup,
+    readonly rab: MultiplicativeGroup,
+  ) {
+    super(x, config);
+  }
+  getResult(): boolean {
+    return this.rab.equal(
+      this.pa.operate(this.pb.inverse())
+    );
+  }
+  transit(_: ISMPMessage): [ISMPState, ISMPMessage] {
+    throw new Error("finished");
+  }
+}
+
+
+/*
+A            B
+SMPSTATE_EXPECT1, SMPSTATE_EXPECT1
+SMPSTATE_EXPECT2, SMPSTATE_EXPECT1
+SMPSTATE_EXPECT2, SMPSTATE_EXPECT3
+SMPSTATE_EXPECT4, SMPSTATE_EXPECT3
+SMPSTATE_EXPECT4, SMPSTATE_EXPECT1
+SMPSTATE_EXPECT1, SMPSTATE_EXPECT1
+
+*/
+
+
+class SMPStateMachine {
+  state: ISMPState;
+
+  constructor(x: BN, config: Config = defaultConfig) {
+    this.state = new SMPState1(x, config);
+  }
+
+  transit(msg: ISMPMessage | null): ISMPMessage {
+    const [newState, retMsg] = this.state.transit(msg);
+    this.state = newState;
+    return retMsg;
+  }
+  getResult(): boolean | undefined {
+    return this.state.getResult();
   }
 }
 
