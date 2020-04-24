@@ -15,10 +15,19 @@ interface IData {
 }
 
 // NOTE: a workaround type to make typing work with `createFixedIntClass`.
-class BaseFixedIntClass implements IData {
-  size: number;
+class BaseSerializable implements IData {
+  static deserialize(bytes: Uint8Array): BaseSerializable {
+    throw new Error(`not implemented: ${bytes}`); // Make tsc happy
+  }
+  serialize(): Uint8Array {
+    throw new Error('not implemented'); // Make tsc happy
+  }
+}
+
+class BaseFixedIntClass extends BaseSerializable {
+  static size: number;
   constructor(readonly value: number) {
-    this.size = 0; // Make tsc happy
+    super();
   }
   static deserialize(bytes: Uint8Array): BaseFixedIntClass {
     throw new Error(`not implemented: ${bytes}`); // Make tsc happy
@@ -34,7 +43,7 @@ function numberToUint8Array(value: number, size?: number): Uint8Array {
 
 function uint8ArrayToNumber(a: Uint8Array): number {
   // the max value of `number` type is `2**53 - 1`
-  if (a.length > 4) {
+  if (a.length > 6) {
     throw new ValueError();
   }
   return new BN(a).toNumber();
@@ -49,10 +58,9 @@ function concatUint8Array(a: Uint8Array, b: Uint8Array): Uint8Array {
 
 function createFixedIntClass(size: number): typeof BaseFixedIntClass {
   class FixedIntClass extends BaseFixedIntClass {
-    size: number;
+    static size: number = size;
     constructor(value: number) {
       super(value);
-      this.size = size; // Override `size`'s value
     }
 
     static deserialize(bytes: Uint8Array): FixedIntClass {
@@ -63,7 +71,7 @@ function createFixedIntClass(size: number): typeof BaseFixedIntClass {
     }
 
     serialize(): Uint8Array {
-      return numberToUint8Array(this.value, this.size);
+      return numberToUint8Array(this.value, size);
     }
   }
   return FixedIntClass;
@@ -73,23 +81,54 @@ const Byte = createFixedIntClass(1);
 const Short = createFixedIntClass(2);
 const Int = createFixedIntClass(4);
 
-class MPI implements IData {
-  static sizeLength: number = 4;
+class MPI implements BaseSerializable {
+  static lengthSize: number = 4;
 
   constructor(readonly value: BN) {}
 
   serialize(): Uint8Array {
     const bytes = new Uint8Array(this.value.toArray(ENDIAN));
-    const lenBytes = numberToUint8Array(bytes.length, MPI.sizeLength);
+    const lenBytes = numberToUint8Array(bytes.length, MPI.lengthSize);
     return concatUint8Array(lenBytes, bytes);
   }
   static deserialize(bytes: Uint8Array): MPI {
-    const len = uint8ArrayToNumber(bytes.slice(0, this.sizeLength));
-    if (bytes.length < this.sizeLength + len) {
+    const len = uint8ArrayToNumber(bytes.slice(0, this.lengthSize));
+    if (bytes.length < this.lengthSize + len) {
       throw new ValueError('`bytes` does not long enough for `len`');
     }
-    const value = new BN(bytes.slice(this.sizeLength, this.sizeLength + len));
+    const value = new BN(bytes.slice(this.lengthSize, this.lengthSize + len));
     return new MPI(value);
+  }
+}
+
+class TLV extends BaseSerializable {
+  constructor(readonly type: BaseFixedIntClass, readonly value: Uint8Array) {
+    super();
+  }
+
+  static deserialize(bytes: Uint8Array): TLV {
+    const typeSize = Short.size;
+    const lengthSize = Short.size;
+    const type = Short.deserialize(bytes.slice(0, typeSize));
+    const length = Short.deserialize(
+      bytes.slice(typeSize, typeSize + lengthSize)
+    );
+    const expectedTLVTotalSize = typeSize + lengthSize + length.value;
+    if (bytes.length < expectedTLVTotalSize) {
+      throw new ValueError('`bytes` does not long enough');
+    }
+    const value = bytes.slice(typeSize + lengthSize, expectedTLVTotalSize);
+    return new TLV(type, value);
+  }
+
+  serialize(): Uint8Array {
+    const typeBytes = this.type.serialize();
+    const lengthBytes = new Short(this.value.length).serialize();
+    const valueBytes = this.value;
+    return concatUint8Array(
+      concatUint8Array(typeBytes, lengthBytes),
+      valueBytes
+    );
   }
 }
 
@@ -133,7 +172,6 @@ SMP Message TLVs (types 2-5) all carry data sharing the same general format:
   - MPI 2 (MPI)
     - The second MPI of the TLV, serialized into a byte array.
 */
-
 
 interface ISMPMessage {
   serialize(...args: any[]): any;
@@ -222,4 +260,5 @@ export {
   Short,
   Int,
   MPI,
+  TLV,
 };
