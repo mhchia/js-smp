@@ -197,7 +197,8 @@ function serializeSMPTLV(
   type: BaseFixedIntClass,
   ...elements: (BN | MultiplicativeGroup)[]
 ): TLV {
-  let res = new Uint8Array([]);
+  const length = new Int(elements.length);
+  let res = length.serialize();
   for (const element of elements) {
     let mpi: MPI;
     if (element instanceof BN) {
