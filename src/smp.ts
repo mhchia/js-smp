@@ -22,15 +22,17 @@ import {
 import { InvalidElement, InvalidProof } from './exceptions';
 
 import {
-  BaseSMPMessage,
   SMPMessage1,
   SMPMessage2,
   SMPMessage3,
   SMPMessage4,
+  TLV,
 } from './msgs';
 
+type TypeTLVOrNull = TLV | null;
+
 interface ISMPState {
-  transit(msg: BaseSMPMessage | null): [ISMPState, BaseSMPMessage | null];
+  transit(msg: TypeTLVOrNull): [ISMPState, TypeTLVOrNull];
   getResult(): boolean | null;
 }
 
@@ -51,9 +53,7 @@ abstract class BaseSMPState implements ISMPState {
     this.config = config;
   }
 
-  abstract transit(
-    msg: BaseSMPMessage | null
-  ): [ISMPState, BaseSMPMessage | null];
+  abstract transit(msg: TypeTLVOrNull): [ISMPState, TypeTLVOrNull];
   abstract getResult(): boolean | null;
 
   getHashFunc(this: BaseSMPState, version: BN): THashFunc {
@@ -204,8 +204,8 @@ class SMPState1 extends BaseSMPState {
   getResult(): boolean | null {
     return null;
   }
-  transit(msg: SMPMessage1 | null): [ISMPState, SMPMessage1 | SMPMessage2] {
-    if (msg === null) {
+  transit(tlv: TypeTLVOrNull): [ISMPState, TypeTLVOrNull] {
+    if (tlv === null) {
       /* Step 0: Alice initaites smp, sending `g2a`, `g3a` to Bob. */
       const [g2a, g2aProof] = this.makeDHPubkey(new BN(1), this.s2);
       const [g3a, g3aProof] = this.makeDHPubkey(new BN(2), this.s3);
@@ -218,12 +218,13 @@ class SMPState1 extends BaseSMPState {
         g2a,
         g3a
       );
-      return [state, msg];
+      return [state, msg.toTLV()];
     } else {
       /*
         Step 1: Bob verifies received data, makes its slice of DH, and sends
         `g2b`, `g3b`, `Pb`, `Qb` to Alice.
       */
+      const msg = SMPMessage1.fromTLV(tlv, this.config.modulus);
       // Verify pubkey's value
       if (
         !this.verifyMultiplicativeGroup(msg.g2a) ||
@@ -268,7 +269,7 @@ class SMPState1 extends BaseSMPState {
         pb,
         qb
       );
-      return [state, msg2];
+      return [state, msg2.toTLV()];
     }
   }
 }
@@ -288,7 +289,11 @@ class SMPState2 extends BaseSMPState {
     return null;
   }
 
-  transit(msg: SMPMessage2): [ISMPState, SMPMessage3] {
+  transit(tlv: TypeTLVOrNull): [ISMPState, TypeTLVOrNull] {
+    if (tlv === null) {
+      throw new Error('');
+    }
+    const msg = SMPMessage2.fromTLV(tlv, this.config.modulus);
     /*
       Step 2: Alice receives bob's DH slices, P Q, and their proofs.
     */
@@ -340,7 +345,7 @@ class SMPState2 extends BaseSMPState {
       ra
     );
 
-    return [state, msg3];
+    return [state, msg3.toTLV()];
   }
 }
 
@@ -364,7 +369,11 @@ class SMPState3 extends BaseSMPState {
   getResult(): boolean | null {
     return null;
   }
-  transit(msg: SMPMessage3): [ISMPState, SMPMessage4] {
+  transit(tlv: TypeTLVOrNull): [ISMPState, TypeTLVOrNull] {
+    if (tlv === null) {
+      throw new Error('');
+    }
+    const msg = SMPMessage3.fromTLV(tlv, this.config.modulus);
     /*
       Step 3: Bob receives `Pa`, `Qa`, `Ra` along with their proofs,
       calculates `Rb` and `Rab` accordingly.
@@ -405,7 +414,7 @@ class SMPState3 extends BaseSMPState {
       this.pL,
       rab
     );
-    return [state, msg4];
+    return [state, msg4.toTLV()];
   }
 }
 
@@ -433,14 +442,15 @@ class SMPState4 extends BaseSMPState {
     return null;
   }
 
-  transit(msg: SMPMessage4 | null): [ISMPState, BaseSMPMessage | null] {
+  transit(tlv: TypeTLVOrNull): [ISMPState, TypeTLVOrNull] {
     /*
       Step 4: Alice receives `Rb` and calculate `Rab` as well.
     */
     // Verify
-    if (msg === null) {
+    if (tlv === null) {
       throw new Error('');
     }
+    const msg = SMPMessage4.fromTLV(tlv, this.config.modulus);
     if (!this.verifyMultiplicativeGroup(msg.rb)) {
       throw new InvalidElement();
     }
@@ -474,7 +484,7 @@ class SMPStateFinished extends BaseSMPState {
   getResult(): boolean {
     return this.rab.equal(this.pa.operate(this.pb.inverse()));
   }
-  transit(_: BaseSMPMessage): [ISMPState, BaseSMPMessage] {
+  transit(_: TypeTLVOrNull): [ISMPState, TypeTLVOrNull] {
     throw new Error('finished');
   }
 }
@@ -486,7 +496,7 @@ class SMPStateMachine {
     this.state = new SMPState1(x, config);
   }
 
-  transit(msg: BaseSMPMessage | null): BaseSMPMessage | null {
+  transit(msg: TypeTLVOrNull): TypeTLVOrNull {
     const [newState, retMsg] = this.state.transit(msg);
     this.state = newState;
     return retMsg;
