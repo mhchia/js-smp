@@ -59,9 +59,6 @@ function concatUint8Array(a: Uint8Array, b: Uint8Array): Uint8Array {
 function createFixedIntClass(size: number): typeof BaseFixedIntClass {
   class FixedIntClass extends BaseFixedIntClass {
     static size: number = size;
-    constructor(value: number) {
-      super(value);
-    }
 
     static deserialize(bytes: Uint8Array): FixedIntClass {
       if (bytes.length !== size) {
@@ -91,13 +88,24 @@ class MPI implements BaseSerializable {
     const lenBytes = numberToUint8Array(bytes.length, MPI.lengthSize);
     return concatUint8Array(lenBytes, bytes);
   }
-  static deserialize(bytes: Uint8Array): MPI {
+
+  static consume(bytes: Uint8Array): [MPI, Uint8Array] {
     const len = uint8ArrayToNumber(bytes.slice(0, this.lengthSize));
     if (bytes.length < this.lengthSize + len) {
       throw new ValueError('`bytes` does not long enough for `len`');
     }
     const value = new BN(bytes.slice(this.lengthSize, this.lengthSize + len));
-    return new MPI(value);
+    return [new MPI(value), bytes.slice(this.lengthSize + len)];
+  }
+
+  static deserialize(bytes: Uint8Array): MPI {
+    const [mpi, bytesRemaining] = this.consume(bytes);
+    if (bytesRemaining.length !== 0) {
+      throw new ValueError(
+        `bytes=${bytes} contains redundant bytes: bytesRemaining=${bytesRemaining}`
+      );
+    }
+    return mpi;
   }
 }
 
@@ -133,19 +141,10 @@ class TLV extends BaseSerializable {
 }
 
 // TODO:
-//  - TLVs
 //  - Use TLV in SMPMessage
 //  - Add {de}serialization in SMPState
 
 /*
-
-TLV
-  - Type (SHORT)
-    - The type of this record. Records with unrecognized types should be ignored.
-  - Length (SHORT)
-    - The length of the following field
-  - Value (len BYTEs) [where len is the value of the Length field]
-    - Any pertinent data for the record type.
 
 Type 0: Padding
 Type 1: Disconnected
@@ -173,36 +172,129 @@ SMP Message TLVs (types 2-5) all carry data sharing the same general format:
     - The second MPI of the TLV, serialized into a byte array.
 */
 
-interface ISMPMessage {
-  serialize(...args: any[]): any;
-  deserialize(...args: any[]): any;
+function bnToMPI(bn: BN): MPI {
+  return new MPI(bn);
 }
 
-class SMPMessageEmpty implements ISMPMessage {
-  serialize(...args: any[]): any {
-    throw new Error(`Not implemented yet ${args}`);
-  }
-  deserialize(...args: any[]): any {
-    throw new Error(`Not implemented yet ${args}`);
-  }
+function multiplicativeGroupToMPI(g: MultiplicativeGroup): MPI {
+  return new MPI(g.value);
 }
 
-class SMPMessage1 implements ISMPMessage {
+function deserializeSMPTLV(tlv: TLV): MPI[] {
+  let bytes = tlv.value;
+  const mpiCount = Int.deserialize(bytes.slice(0, Int.size));
+  let bytesRemaining = bytes.slice(Int.size);
+  const elements: MPI[] = [];
+  let mpi: MPI;
+  for (let i = 0; i < mpiCount.value; i++) {
+    [mpi, bytesRemaining] = MPI.consume(bytesRemaining);
+    elements.push(mpi);
+  }
+  return elements;
+}
+
+function serializeSMPTLV(
+  type: BaseFixedIntClass,
+  ...elements: (BN | MultiplicativeGroup)[]
+): TLV {
+  let res = new Uint8Array([]);
+  for (const element of elements) {
+    let mpi: MPI;
+    if (element instanceof BN) {
+      mpi = bnToMPI(element);
+    } else {
+      mpi = multiplicativeGroupToMPI(element);
+    }
+    res = concatUint8Array(res, mpi.serialize());
+  }
+  return new TLV(type, res);
+}
+
+abstract class BaseSMPMessage {
+  static getMPIsfromTLV(
+    type: BaseFixedIntClass,
+    expectedLength: number,
+    tlv: TLV
+  ): MPI[] {
+    if (type.value !== tlv.type.value) {
+      throw new ValueError(
+        `type mismatch: type.value=${type.value}, tlv.type.value=${tlv.type.value}`
+      );
+    }
+    const mpis = deserializeSMPTLV(tlv);
+    if (expectedLength !== mpis.length) {
+      throw new ValueError(
+        `length of tlv=${tlv} mismatches: expectedLength=${expectedLength}`
+      );
+    }
+    return mpis;
+  }
+
+  // abstract methods
+  static fromTLV(tlv: TLV, groupOrder: BN): BaseSMPMessage {
+    throw new Error(`not implemented: ${tlv}, ${groupOrder}`);
+  }
+  abstract toTLV(): TLV;
+}
+
+// const TLVTypePadding = new Short(0);
+const TLVTypeSMPMessage1 = new Short(2);
+const TLVTypeSMPMessage2 = new Short(3);
+const TLVTypeSMPMessage3 = new Short(4);
+const TLVTypeSMPMessage4 = new Short(5);
+// const TLVTypeSMPMessageAbort = new Short(6);
+// const TLVTypeSMPMessage1Q = new Short(7);
+
+class SMPMessage1 extends BaseSMPMessage {
+  wireValues: [MultiplicativeGroup, BN, BN, MultiplicativeGroup, BN, BN];
+
   constructor(
     readonly g2a: MultiplicativeGroup,
     readonly g2aProof: ProofDiscreteLog,
     readonly g3a: MultiplicativeGroup,
     readonly g3aProof: ProofDiscreteLog
-  ) {}
-  serialize(...args: any[]): any {
-    throw new Error(`Not implemented yet ${args}`);
+  ) {
+    super();
+    this.wireValues = [
+      g2a,
+      g2aProof.c,
+      g2aProof.d,
+      g3a,
+      g3aProof.c,
+      g3aProof.d,
+    ];
   }
-  deserialize(...args: any[]): any {
-    throw new Error(`Not implemented yet ${args}`);
+
+  static fromTLV(tlv: TLV, groupOrder: BN): SMPMessage1 {
+    const mpis = this.getMPIsfromTLV(TLVTypeSMPMessage1, 6, tlv);
+    return new SMPMessage1(
+      new MultiplicativeGroup(groupOrder, mpis[0].value),
+      { c: mpis[1].value, d: mpis[2].value },
+      new MultiplicativeGroup(groupOrder, mpis[3].value),
+      { c: mpis[4].value, d: mpis[5].value }
+    );
+  }
+
+  toTLV(): TLV {
+    return serializeSMPTLV(TLVTypeSMPMessage1, ...this.wireValues);
   }
 }
 
-class SMPMessage2 implements ISMPMessage {
+class SMPMessage2 extends BaseSMPMessage {
+  wireValues: [
+    MultiplicativeGroup,
+    BN,
+    BN,
+    MultiplicativeGroup,
+    BN,
+    BN,
+    MultiplicativeGroup,
+    MultiplicativeGroup,
+    BN,
+    BN,
+    BN
+  ];
+
   constructor(
     readonly g2b: MultiplicativeGroup,
     readonly g2bProof: ProofDiscreteLog,
@@ -211,51 +303,118 @@ class SMPMessage2 implements ISMPMessage {
     readonly pb: MultiplicativeGroup,
     readonly qb: MultiplicativeGroup,
     readonly pbqbProof: ProofEqualDiscreteCoordinates
-  ) {}
-  serialize(...args: any[]): any {
-    throw new Error(`Not implemented yet ${args}`);
+  ) {
+    super();
+    this.wireValues = [
+      g2b,
+      g2bProof.c,
+      g2bProof.d,
+      g3b,
+      g3bProof.c,
+      g3bProof.d,
+      pb,
+      qb,
+      pbqbProof.c,
+      pbqbProof.d0,
+      pbqbProof.d1,
+    ];
   }
-  deserialize(...args: any[]): any {
-    throw new Error(`Not implemented yet ${args}`);
+
+  static fromTLV(tlv: TLV, groupOrder: BN): SMPMessage2 {
+    const mpis = this.getMPIsfromTLV(TLVTypeSMPMessage2, 11, tlv);
+    return new SMPMessage2(
+      new MultiplicativeGroup(groupOrder, mpis[0].value),
+      { c: mpis[1].value, d: mpis[2].value },
+      new MultiplicativeGroup(groupOrder, mpis[3].value),
+      { c: mpis[4].value, d: mpis[5].value },
+      new MultiplicativeGroup(groupOrder, mpis[6].value),
+      new MultiplicativeGroup(groupOrder, mpis[7].value),
+      { c: mpis[8].value, d0: mpis[9].value, d1: mpis[10].value }
+    );
+  }
+
+  toTLV(): TLV {
+    return serializeSMPTLV(TLVTypeSMPMessage2, ...this.wireValues);
   }
 }
 
-class SMPMessage3 implements ISMPMessage {
+class SMPMessage3 extends BaseSMPMessage {
+  wireValues: [
+    MultiplicativeGroup,
+    MultiplicativeGroup,
+    BN,
+    BN,
+    BN,
+    MultiplicativeGroup,
+    BN,
+    BN
+  ];
+
   constructor(
     readonly pa: MultiplicativeGroup,
     readonly qa: MultiplicativeGroup,
     readonly paqaProof: ProofEqualDiscreteCoordinates,
     readonly ra: MultiplicativeGroup,
     readonly raProof: ProofEqualDiscreteLogs
-  ) {}
-  serialize(...args: any[]): any {
-    throw new Error(`Not implemented yet ${args}`);
+  ) {
+    super();
+    this.wireValues = [
+      pa,
+      qa,
+      paqaProof.c,
+      paqaProof.d0,
+      paqaProof.d1,
+      ra,
+      raProof.c,
+      raProof.d,
+    ];
   }
-  deserialize(...args: any[]): any {
-    throw new Error(`Not implemented yet ${args}`);
+
+  static fromTLV(tlv: TLV, groupOrder: BN): SMPMessage3 {
+    const mpis = this.getMPIsfromTLV(TLVTypeSMPMessage3, 8, tlv);
+    return new SMPMessage3(
+      new MultiplicativeGroup(groupOrder, mpis[0].value),
+      new MultiplicativeGroup(groupOrder, mpis[1].value),
+      { c: mpis[2].value, d0: mpis[3].value, d1: mpis[4].value },
+      new MultiplicativeGroup(groupOrder, mpis[5].value),
+      { c: mpis[6].value, d: mpis[7].value }
+    );
+  }
+
+  toTLV(): TLV {
+    return serializeSMPTLV(TLVTypeSMPMessage3, ...this.wireValues);
   }
 }
 
-class SMPMessage4 implements ISMPMessage {
+class SMPMessage4 extends BaseSMPMessage {
+  wireValues: [MultiplicativeGroup, BN, BN];
   constructor(
     readonly rb: MultiplicativeGroup,
     readonly rbProof: ProofEqualDiscreteLogs
-  ) {}
-  serialize(...args: any[]): any {
-    throw new Error(`Not implemented yet ${args}`);
+  ) {
+    super();
+    this.wireValues = [rb, rbProof.c, rbProof.d];
   }
-  deserialize(...args: any[]): any {
-    throw new Error(`Not implemented yet ${args}`);
+
+  static fromTLV(tlv: TLV, groupOrder: BN): SMPMessage4 {
+    const mpis = this.getMPIsfromTLV(TLVTypeSMPMessage4, 3, tlv);
+    return new SMPMessage4(new MultiplicativeGroup(groupOrder, mpis[0].value), {
+      c: mpis[1].value,
+      d: mpis[2].value,
+    });
+  }
+
+  toTLV(): TLV {
+    return serializeSMPTLV(TLVTypeSMPMessage4, ...this.wireValues);
   }
 }
 
 export {
-  ISMPMessage,
+  BaseSMPMessage,
   SMPMessage1,
   SMPMessage2,
   SMPMessage3,
   SMPMessage4,
-  SMPMessageEmpty,
   Byte,
   Short,
   Int,

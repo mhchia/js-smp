@@ -22,16 +22,15 @@ import {
 import { InvalidElement, InvalidProof } from './exceptions';
 
 import {
-  ISMPMessage,
+  BaseSMPMessage,
   SMPMessage1,
   SMPMessage2,
   SMPMessage3,
   SMPMessage4,
-  SMPMessageEmpty,
 } from './msgs';
 
 interface ISMPState {
-  transit(msg: ISMPMessage | null): [ISMPState, ISMPMessage | null];
+  transit(msg: BaseSMPMessage | null): [ISMPState, BaseSMPMessage | null];
   getResult(): boolean | null;
 }
 
@@ -52,7 +51,9 @@ abstract class BaseSMPState implements ISMPState {
     this.config = config;
   }
 
-  abstract transit(msg: ISMPMessage | null): [ISMPState, ISMPMessage];
+  abstract transit(
+    msg: BaseSMPMessage | null
+  ): [ISMPState, BaseSMPMessage | null];
   abstract getResult(): boolean | null;
 
   getHashFunc(this: BaseSMPState, version: BN): THashFunc {
@@ -431,11 +432,15 @@ class SMPState4 extends BaseSMPState {
   getResult(): boolean | null {
     return null;
   }
-  transit(msg: SMPMessage4): [ISMPState, ISMPMessage] {
+
+  transit(msg: SMPMessage4 | null): [ISMPState, BaseSMPMessage | null] {
     /*
       Step 4: Alice receives `Rb` and calculate `Rab` as well.
     */
     // Verify
+    if (msg === null) {
+      throw new Error('');
+    }
     if (!this.verifyMultiplicativeGroup(msg.rb)) {
       throw new InvalidElement();
     }
@@ -452,7 +457,7 @@ class SMPState4 extends BaseSMPState {
       this.pR,
       rab
     );
-    return [state, new SMPMessageEmpty()];
+    return [state, null];
   }
 }
 
@@ -469,7 +474,7 @@ class SMPStateFinished extends BaseSMPState {
   getResult(): boolean {
     return this.rab.equal(this.pa.operate(this.pb.inverse()));
   }
-  transit(_: ISMPMessage): [ISMPState, ISMPMessage] {
+  transit(_: BaseSMPMessage): [ISMPState, BaseSMPMessage] {
     throw new Error('finished');
   }
 }
@@ -481,7 +486,7 @@ class SMPStateMachine {
     this.state = new SMPState1(x, config);
   }
 
-  transit(msg: ISMPMessage | null): ISMPMessage | null {
+  transit(msg: BaseSMPMessage | null): BaseSMPMessage | null {
     const [newState, retMsg] = this.state.transit(msg);
     this.state = newState;
     return retMsg;
