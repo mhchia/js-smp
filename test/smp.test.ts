@@ -11,57 +11,18 @@ function smp(x: BN, y: BN): boolean | null {
   const msg3 = alice.transit(msg2);
   const msg4 = bob.transit(msg3);
   alice.transit(msg4);
-  if (alice.getResult() === null) {
+  const resAlice = alice.getResult();
+  const resBob = bob.getResult();
+  if (resAlice === null) {
     throw new Error('result should have been set on Alice side');
   }
-  if (bob.getResult() === null) {
+  if (resBob === null) {
     throw new Error('result should have been set on Bob side');
   }
-  if (alice.getResult() !== bob.getResult()) {
+  if (resAlice !== resBob) {
     throw new Error('Alice and Bob got different results');
   }
-  return alice.getResult();
-
-  // const msg1 = alice.beginSMP();
-  // const msg2 = bob.handleSMPMessage1(msg1);
-  // const msg3 = alice.handleSMPMessage2(msg2);
-
-  // // NOTE: Sanity check that `alice.g2 == bob.g2` and `alice.g3 == bob.g3`
-  // if (
-  //   alice.state.g2 === undefined ||
-  //   bob.state.g2 === undefined ||
-  //   !alice.state.g2.equal(bob.state.g2)
-  // ) {
-  //   throw new Error('`g2` is not shared successfully by Alice and Bob');
-  // }
-  // if (
-  //   alice.state.g3 === undefined ||
-  //   bob.state.g3 === undefined ||
-  //   !alice.state.g3.equal(bob.state.g3)
-  // ) {
-  //   throw new Error('`g3` is not shared successfully by Alice and Bob');
-  // }
-  // const msg4 = bob.handleSMPMessage3(msg3);
-  // alice.handleSMPMessage4(msg4);
-  // // Sanity check that `alice.rab == bob.rab`
-  // if (
-  //   alice.state.r === undefined ||
-  //   bob.state.r === undefined ||
-  //   !alice.state.r.equal(bob.state.r)
-  // ) {
-  //   throw new Error('`rab` is not shared successfully by Alice and Bob');
-  // }
-  // // Sanity check
-  // if (alice.result === undefined) {
-  //   throw new Error("smp should should have finished on Alice's side");
-  // }
-  // if (bob.result === undefined) {
-  //   throw new Error("smp should should have finished on Bob's side");
-  // }
-  // if (alice.result !== bob.result) {
-  //   throw new Error('Alice and Bob get different result!');
-  // }
-  // return alice.result;
+  return resAlice;
 }
 
 describe('test smp', () => {

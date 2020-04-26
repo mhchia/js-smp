@@ -7,21 +7,14 @@ import {
 import { ENDIAN } from './constants';
 import BN from 'bn.js';
 
-class ParsingError extends Error {}
-class ValueError extends ParsingError {}
-
-interface IData {
-  serialize(): Uint8Array;
-}
+import { NotImplemented, ValueError } from './exceptions';
 
 // NOTE: a workaround type to make typing work with `createFixedIntClass`.
-class BaseSerializable implements IData {
-  static deserialize(bytes: Uint8Array): BaseSerializable {
-    throw new Error(`not implemented: ${bytes}`); // Make tsc happy
+abstract class BaseSerializable {
+  static deserialize(_: Uint8Array): BaseSerializable {
+    throw new NotImplemented(); // Make tsc happy
   }
-  serialize(): Uint8Array {
-    throw new Error('not implemented'); // Make tsc happy
-  }
+  abstract serialize(): Uint8Array;
 }
 
 class BaseFixedIntClass extends BaseSerializable {
@@ -29,11 +22,11 @@ class BaseFixedIntClass extends BaseSerializable {
   constructor(readonly value: number) {
     super();
   }
-  static deserialize(bytes: Uint8Array): BaseFixedIntClass {
-    throw new Error(`not implemented: ${bytes}`); // Make tsc happy
+  static deserialize(_: Uint8Array): BaseFixedIntClass {
+    throw new NotImplemented(); // Make tsc happy
   }
   serialize(): Uint8Array {
-    throw new Error('not implemented'); // Make tsc happy
+    throw new NotImplemented(); // Make tsc happy
   }
 }
 
@@ -107,6 +100,10 @@ class MPI implements BaseSerializable {
     }
     return mpi;
   }
+
+  static fromMultiplicativeGroup(g: MultiplicativeGroup): MPI {
+    return new MPI(g.value);
+  }
 }
 
 class TLV extends BaseSerializable {
@@ -140,46 +137,6 @@ class TLV extends BaseSerializable {
   }
 }
 
-// TODO:
-//  - Use TLV in SMPMessage
-//  - Add {de}serialization in SMPState
-
-/*
-
-Type 0: Padding
-Type 1: Disconnected
-Type 2: SMP Message 1
-Type 3: SMP Message 2
-Type 4: SMP Message 3
-Type 5: SMP Message 4
-Type 6: SMP Abort Message
-Type 7: SMP Message 1Q
-Type 8: Extra symmetric key
-
-type 2 (SMP message 1)
-type 3 TLVs (SMP message 2)
-type 4 TLVs (SMP message 3)
-type 5 TLVs (SMP message 4)
-type 6 TLV (SMP abort):
-type 7 (SMP message 1Q)
-
-SMP Message TLVs (types 2-5) all carry data sharing the same general format:
-  - MPI count (INT)
-    - The number of MPIs contained in the remainder of the TLV.
-  - MPI 1 (MPI)
-    - The first MPI of the TLV, serialized into a byte array.
-  - MPI 2 (MPI)
-    - The second MPI of the TLV, serialized into a byte array.
-*/
-
-function bnToMPI(bn: BN): MPI {
-  return new MPI(bn);
-}
-
-function multiplicativeGroupToMPI(g: MultiplicativeGroup): MPI {
-  return new MPI(g.value);
-}
-
 function deserializeSMPTLV(tlv: TLV): MPI[] {
   let bytes = tlv.value;
   const mpiCount = Int.deserialize(bytes.slice(0, Int.size));
@@ -202,9 +159,9 @@ function serializeSMPTLV(
   for (const element of elements) {
     let mpi: MPI;
     if (element instanceof BN) {
-      mpi = bnToMPI(element);
+      mpi = new MPI(element);
     } else {
-      mpi = multiplicativeGroupToMPI(element);
+      mpi = MPI.fromMultiplicativeGroup(element);
     }
     res = concatUint8Array(res, mpi.serialize());
   }
@@ -232,8 +189,8 @@ abstract class BaseSMPMessage {
   }
 
   // abstract methods
-  static fromTLV(tlv: TLV, groupOrder: BN): BaseSMPMessage {
-    throw new Error(`not implemented: ${tlv}, ${groupOrder}`);
+  static fromTLV(_: TLV, __: BN): BaseSMPMessage {
+    throw new NotImplemented();
   }
   abstract toTLV(): TLV;
 }

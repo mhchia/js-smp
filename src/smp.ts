@@ -19,7 +19,13 @@ import {
   THashFunc,
 } from './proofs';
 
-import { InvalidElement, InvalidProof } from './exceptions';
+import {
+  InvalidElement,
+  InvalidProof,
+  ValueError,
+  NotImplemented,
+  SMPNotFinished,
+} from './exceptions';
 
 import {
   SMPMessage1,
@@ -291,7 +297,7 @@ class SMPState2 extends BaseSMPState {
 
   transit(tlv: TypeTLVOrNull): [ISMPState, TypeTLVOrNull] {
     if (tlv === null) {
-      throw new Error('');
+      throw new ValueError();
     }
     const msg = SMPMessage2.fromTLV(tlv, this.config.modulus);
     /*
@@ -371,7 +377,7 @@ class SMPState3 extends BaseSMPState {
   }
   transit(tlv: TypeTLVOrNull): [ISMPState, TypeTLVOrNull] {
     if (tlv === null) {
-      throw new Error('');
+      throw new ValueError();
     }
     const msg = SMPMessage3.fromTLV(tlv, this.config.modulus);
     /*
@@ -448,7 +454,7 @@ class SMPState4 extends BaseSMPState {
     */
     // Verify
     if (tlv === null) {
-      throw new Error('');
+      throw new ValueError();
     }
     const msg = SMPMessage4.fromTLV(tlv, this.config.modulus);
     if (!this.verifyMultiplicativeGroup(msg.rb)) {
@@ -485,7 +491,7 @@ class SMPStateFinished extends BaseSMPState {
     return this.rab.equal(this.pa.operate(this.pb.inverse()));
   }
   transit(_: TypeTLVOrNull): [ISMPState, TypeTLVOrNull] {
-    throw new Error('finished');
+    throw new NotImplemented();
   }
 }
 
@@ -501,10 +507,18 @@ class SMPStateMachine {
     this.state = newState;
     return retMsg;
   }
-  getResult(): boolean | null {
-    return this.state.getResult();
+
+  getResult(): boolean {
+    const result = this.state.getResult();
+    if (result === null) {
+      throw new SMPNotFinished();
+    }
+    return result;
   }
-  // TODO: Add `isFinished`?
+
+  isFinished(): boolean {
+    return this.state.getResult() === null;
+  }
 }
 
 export { SMPStateMachine };
