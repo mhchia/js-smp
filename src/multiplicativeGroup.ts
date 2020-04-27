@@ -13,8 +13,8 @@ abstract class BaseGroup implements IGroup {
   abstract operate(g: BaseGroup): BaseGroup;
   abstract inverse(): BaseGroup;
   abstract equal(g: BaseGroup): boolean;
-  exponentiate(this: BaseGroup, exponent: BN): BaseGroup {
-    let cur = this;
+  exponentiate(exponent: BN): BaseGroup {
+    let cur: BaseGroup = this;
     let y = this.identity();
     if (exponent.isNeg()) {
       cur = cur.inverse();
@@ -58,7 +58,7 @@ class MultiplicativeGroup extends BaseGroup {
   equal(this: MultiplicativeGroup, g: MultiplicativeGroup): boolean {
     return this.n.eq(g.n) && this.value.eq(g.value);
   }
-  exponentiate(this: MultiplicativeGroup, exponent: BN): MultiplicativeGroup {
+  exponentiate(exponent: BN): MultiplicativeGroup {
     return super.exponentiate(exponent) as MultiplicativeGroup;
   }
 }

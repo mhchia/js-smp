@@ -43,17 +43,11 @@ interface ISMPState {
 }
 
 abstract class BaseSMPState implements ISMPState {
-  readonly config: Config;
-
-  // SMP secret
-  readonly x: BN;
-
   // Public
   readonly q: BN;
   readonly g1: MultiplicativeGroup;
 
-  constructor(x: BN, config: Config = defaultConfig) {
-    this.x = x;
+  constructor(readonly x: BN, readonly config: Config) {
     this.q = config.q;
     this.g1 = config.g;
     this.config = config;
@@ -516,9 +510,10 @@ class SMPStateMachine {
     return result;
   }
 
+  // TODO: Add `isAborted`
   isFinished(): boolean {
-    return this.state.getResult() === null;
+    return this.state.getResult() !== null;
   }
 }
 
-export { SMPStateMachine };
+export { SMPStateMachine, TypeTLVOrNull };

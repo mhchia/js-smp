@@ -12,6 +12,10 @@ class NotImplemented extends BaseSMPError {}
 class ParsingError extends BaseSMPError {}
 class ValueError extends ParsingError {}
 
+class NetworkingError extends BaseSMPError {}
+class FailedToReadData extends NetworkingError {}
+
+
 export {
   InvalidState,
   InvalidElement,
@@ -20,4 +24,6 @@ export {
   NotImplemented,
   ValueError,
   SMPNotFinished,
+  FailedToReadData,
+  SMPStateError,
 };

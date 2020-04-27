@@ -3,6 +3,7 @@ import BN from 'bn.js';
 import { Byte, Short, Int, MPI, TLV } from '../src/msgs';
 
 // TODO: Add failure cases
+// TODO: Add tests for `SMPMessage`s
 
 describe('Fixed types', () => {
   const types = [Byte, Short, Int];

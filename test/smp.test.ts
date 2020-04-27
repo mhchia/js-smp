@@ -3,10 +3,10 @@ import BN from 'bn.js';
 import { SMPStateMachine } from '../src/smp';
 
 function smp(x: BN, y: BN): boolean | null {
-  const alice = new SMPStateMachine(x); // Initiator
-  const bob = new SMPStateMachine(y); // Responder
+  const alice = new SMPStateMachine(x);
+  const bob = new SMPStateMachine(y);
 
-  const msg1 = alice.transit(null);
+  const msg1 = alice.transit(null); // Initiate SMP
   const msg2 = bob.transit(msg1);
   const msg3 = alice.transit(msg2);
   const msg4 = bob.transit(msg3);

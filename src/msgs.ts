@@ -1,3 +1,5 @@
+import * as TCP from 'net';
+
 import { MultiplicativeGroup } from './multiplicativeGroup';
 import {
   ProofDiscreteLog,
@@ -7,7 +9,7 @@ import {
 import { ENDIAN } from './constants';
 import BN from 'bn.js';
 
-import { NotImplemented, ValueError } from './exceptions';
+import { NotImplemented, ValueError, FailedToReadData } from './exceptions';
 
 // NOTE: a workaround type to make typing work with `createFixedIntClass`.
 abstract class BaseSerializable {
@@ -55,6 +57,7 @@ function createFixedIntClass(size: number): typeof BaseFixedIntClass {
 
     static deserialize(bytes: Uint8Array): FixedIntClass {
       if (bytes.length !== size) {
+        console.log(`!@# createFixedIntClass: bytes.length=${bytes.length}, size=${size}`)
         throw new ValueError();
       }
       return new FixedIntClass(uint8ArrayToNumber(bytes));
@@ -109,6 +112,25 @@ class MPI implements BaseSerializable {
 class TLV extends BaseSerializable {
   constructor(readonly type: BaseFixedIntClass, readonly value: Uint8Array) {
     super();
+  }
+
+  static readFromSocket(socket: TCP.Socket): TLV {
+    const typeBytes = socket.read(Short.size);
+    if (typeBytes === null || typeBytes instanceof Buffer && typeBytes.length !== Short.size) {
+      throw new FailedToReadData();
+    }
+    const type = Short.deserialize(typeBytes);
+    const lengthBytes = socket.read(Short.size);
+    if (lengthBytes === null || lengthBytes instanceof Buffer && lengthBytes.length !== Short.size) {
+      throw new FailedToReadData();
+    }
+    const length = Short.deserialize(lengthBytes).value;
+    const valueBytes = socket.read(length);
+    if (valueBytes === null || valueBytes instanceof Buffer && valueBytes.length !== length) {
+      throw new FailedToReadData();
+    }
+    const value = new Uint8Array(valueBytes);
+    return new TLV(type, value);
   }
 
   static deserialize(bytes: Uint8Array): TLV {
