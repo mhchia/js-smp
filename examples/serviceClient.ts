@@ -1,6 +1,6 @@
 import BN from 'bn.js';
 
-import { SMPService } from './service';
+import { SMPService } from '../src/service';
 
 const IP = '127.0.0.1';
 const PORT = 3000;
@@ -10,5 +10,4 @@ async function main() {
   const result = await client.connect(IP, PORT);
   console.log("Client:", result);
 }
-
 main();
