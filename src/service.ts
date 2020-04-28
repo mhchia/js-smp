@@ -5,20 +5,33 @@ import BN from 'bn.js';
 import { Config, defaultConfig } from './config';
 import { SMPStateMachine, TypeTLVOrNull } from './smp';
 import { TLV } from './msgs';
-import { FailedToReadData, SMPStateError } from "./exceptions";
+import { FailedToReadData, SMPStateError } from './exceptions';
 
 const sleep = (ms: number) => new Promise(res => setTimeout(res, ms));
 
+// TODO: Change to Promise
+async function waitUntilTrue(conditionChecker: () => boolean): Promise<void> {
+  while (!conditionChecker()) {
+    await sleep(10);
+  }
+}
+
 interface ISMPService {
   listen(ip: string, port: number): void;
+  close(): void;
   connect(ip: string, port: number): Promise<boolean>;
 }
+
+type Connection = { socket: TCP.Socket; result: boolean | null };
 
 // TODO: Change log to logger
 class SMPService implements ISMPService {
   listener?: TCP.Server;
+  connections: Map<string, Connection>;
 
-  constructor(readonly x: BN, readonly config: Config = defaultConfig) {}
+  constructor(readonly x: BN, readonly config: Config = defaultConfig) {
+    this.connections = new Map();
+  }
 
   listen(ip: string, port: number): void {
     const server = TCP.createServer(this.onClientConnected.bind(this));
@@ -28,72 +41,48 @@ class SMPService implements ISMPService {
     this.listener = server;
   }
 
+  close(): void {
+    if (this.listener === undefined) {
+      return;
+    }
+    this.listener.close();
+    // TODO: close the existing connections
+  }
+
   async onClientConnected(sock: TCP.Socket): Promise<void> {
     const remoteAddress = sock.remoteAddress + ':' + sock.remotePort;
     console.log(
-      'SMPService.onClientConnected: new sock connected: %s',
-      remoteAddress
+      `SMPService.onClientConnected: new sock connected: ${remoteAddress}`
     );
+    this.connections.set(remoteAddress, { socket: sock, result: null });
 
     const stateMachine = new SMPStateMachine(this.x, this.config);
 
-    sock.on('readable', function() {
-      console.log(`SMPService.onClientConnected.readable: new data from ${ remoteAddress}`);
-      // TODO: Do we need a lock here, to avoid another entrance before `TLV.readFromSocket`
-      //  finishes?
-      let tlv: TLV;
-      try {
-        tlv = TLV.readFromSocket(sock);
-      } catch (e) {
-        if (e instanceof FailedToReadData) {
-          sock.destroy(e);
-          return;
-        } else {
-          throw e;
-        }
-      }
-      console.log(
-        `SMPService.onClientConnected.readable: read tlv: type=${tlv.type}, value=${tlv.value}`
-      );
-
-      let replyTLV: TypeTLVOrNull;
-      try {
-        replyTLV = stateMachine.transit(tlv);
-      } catch (e) {
-        if (e instanceof SMPStateError) {
-          sock.destroy(e);
-          return;
-        } else {
-          throw e;
-        }
-      }
-      if (replyTLV === null) {
-        return;
-      }
-      if (!sock.writable) {
-        return;
-      }
-      sock.write(replyTLV.serialize());
-      console.log(
-        `SMPService.onClientConnected.connect: wrote tlv: type=${replyTLV.type}, value=${replyTLV.value}`
-      );
+    sock.on('readable', () => {
+      this.readProcessReply(sock, stateMachine);
     });
     sock.on('close', function() {
-      console.log('SMPService.onClientConnected.close: connection from %s closed', remoteAddress);
-    });
-    sock.on('error', function(err) {
       console.log(
-        'SMPService.onClientConnected.error: connection %s error: %s',
-        remoteAddress,
-        err.message
+        `SMPService.onClientConnected: connection from ${remoteAddress} closed`
       );
     });
-    while (!stateMachine.isFinished()) {
-      console.log("SMPService.onClientConnected: in while");
-      await sleep(100);
-    }
+    sock.on('error', function(err) {
+      // TODO: Handle `error` properly. It seems we couldn't catch `FailedToReadData` even though
+      //  we explicitly catch it everywhere.
+      console.log(
+        `SMPService.onClientConnected: connection ${remoteAddress} error: ${err.message}`
+      );
+    });
+    // NOTE: No need to handle `end` since `allowHalfOpen=False`
+    // TODO: Add `timeout`
+
+    await waitUntilTrue(stateMachine.isFinished.bind(stateMachine));
     const result = stateMachine.getResult();
-    console.log(`SMPService.onClientConnected: result=${result}`)
+    this.connections.set(remoteAddress, { socket: sock, result: result });
+    console.log(
+      `SMPService.onClientConnected: SMP finished with ${remoteAddress}, result=${result}`
+    );
+    sock.end();
   }
 
   async connect(ip: string, port: number): Promise<boolean> {
@@ -101,77 +90,84 @@ class SMPService implements ISMPService {
     const stateMachine = new SMPStateMachine(this.x, this.config);
 
     sock.connect(port, ip, () => {
-      const address = sock.address();
-      if (typeof address === 'string') {
-        console.log(`SMPService.connect: connected to ${address}:${port}`);
-      } else {
-        console.log(
-          `SMPService.connect: connected to ${address.address}:${port}`
-        );
+      const remoteAddress = sock.remoteAddress + ':' + sock.remotePort;
+      console.log(`SMPService.connect: connected to ${remoteAddress}`);
+      let msg1: TLV | null;
+      try {
+        msg1 = stateMachine.transit(null);
+      } catch (e) {
+        if (e instanceof SMPStateError) {
+          sock.end();
+          return;
+        } else {
+          throw e;
+        }
       }
-      const msg1 = stateMachine.transit(null);
       // Sanity check
       if (msg1 === null) {
+        sock.end();
         throw new Error('msg1 should not be null');
       }
-      console.log("SMPService.connect: sock.write=", msg1.serialize())
+      if (!sock.writable) {
+        sock.end();
+        throw new Error('socket is not writable');
+      }
       sock.write(msg1.serialize());
-      console.log(
-        `SMPService.connect: wrote tlv: type=${msg1.type}, value=${msg1.value}`
-      );
     });
 
     sock.on('readable', () => {
-      let tlv: TLV;
       try {
-        tlv = TLV.readFromSocket(sock);
+        this.readProcessReply(sock, stateMachine);
       } catch (e) {
-        if (e instanceof FailedToReadData) {
-          sock.destroy(e);
-          return;
-        } else {
-          throw e;
-        }
-      }
-      console.log(
-        `SMPService.connect.readable: read tlv: type=${tlv.type}, value=${tlv.value}`
-      );
-      let replyTLV: TypeTLVOrNull;
-      try {
-        replyTLV = stateMachine.transit(tlv);
-      } catch (e) {
-        if (e instanceof SMPStateError) {
-          sock.destroy(e);
-          return;
-        } else {
-          throw e;
-        }
-      }
-      if (replyTLV === null) {
         return;
       }
-      if (!sock.writable) {
-        return;
-      }
-      sock.write(replyTLV.serialize());
-      console.log(
-        `SMPService.connect: wrote tlv: type=${replyTLV.type}, value=${replyTLV.value}`
-      );
     });
-
     sock.on('close', () => {
-      console.log('SMPService.connect: Client closed');
+      console.log('SMPService.connect: connection closed');
     });
-
     sock.on('error', err => {
-      console.error(err);
+      // TODO: Handle `error` properly. It seems we couldn't catch `FailedToReadData` even though
+      //  we explicitly catch it everywhere.
+      console.log(`SMPService.connect: connection error: ${err.message}`);
     });
+    // NOTE: No need to handle `end` since `allowHalfOpen=False`
+    // TODO: Add `timeout`
 
-    while (!stateMachine.isFinished()) {
-      console.log("in while");
-      await sleep(100);
-    }
+    await waitUntilTrue(stateMachine.isFinished.bind(stateMachine));
+    sock.end();
     return stateMachine.getResult();
+  }
+
+  readProcessReply(sock: TCP.Socket, stateMachine: SMPStateMachine): void {
+    let tlv: TLV;
+    try {
+      tlv = TLV.readFromSocket(sock);
+    } catch (e) {
+      if (e instanceof FailedToReadData) {
+        sock.destroy(e);
+        return;
+      } else {
+        throw e;
+      }
+    }
+    let replyTLV: TypeTLVOrNull;
+    try {
+      replyTLV = stateMachine.transit(tlv);
+    } catch (e) {
+      if (e instanceof SMPStateError) {
+        sock.destroy(e);
+        return;
+      } else {
+        throw e;
+      }
+    }
+    if (replyTLV === null) {
+      return;
+    }
+    if (!sock.writable) {
+      return;
+    }
+    sock.write(replyTLV.serialize());
   }
 }
 
