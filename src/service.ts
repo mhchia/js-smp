@@ -57,6 +57,7 @@ class SMPService implements ISMPService {
     this.connections.set(remoteAddress, { socket: sock, result: null });
 
     const stateMachine = new SMPStateMachine(this.x, this.config);
+    // TODO: Probably move all read/write logic here? This way we don't need locks.
 
     sock.on('readable', () => {
       this.readProcessReply(sock, stateMachine);
@@ -113,6 +114,7 @@ class SMPService implements ISMPService {
         throw new Error('socket is not writable');
       }
       sock.write(msg1.serialize());
+      // TODO: Probably move all read/write logic here? This way we don't need locks.
     });
 
     sock.on('readable', () => {
