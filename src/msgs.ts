@@ -55,6 +55,15 @@ function createFixedIntClass(size: number): typeof BaseFixedInt {
   class FixedIntClass extends BaseFixedInt {
     static size: number = size;
 
+    constructor(readonly value: number) {
+      super(value);
+      if (value < 0 || value > 2 ** (size * 8) - 1) {
+        throw new ValueError(
+          `invalid value: value=${value}, maximum=${2 ** (size * 8) - 1}`
+        );
+      }
+    }
+
     static deserialize(bytes: Uint8Array): FixedIntClass {
       if (bytes.length !== size) {
         throw new ValueError();
@@ -76,7 +85,11 @@ const Int = createFixedIntClass(4);
 class MPI implements BaseSerializable {
   static lengthSize: number = 4;
 
-  constructor(readonly value: BN) {}
+  constructor(readonly value: BN) {
+    if (value.isNeg()) {
+      throw new ValueError('expect non-negative value');
+    }
+  }
 
   serialize(): Uint8Array {
     const bytes = new Uint8Array(this.value.toArray(ENDIAN));
