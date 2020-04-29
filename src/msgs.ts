@@ -411,4 +411,5 @@ export {
   Int,
   MPI,
   TLV,
+  concatUint8Array,
 };
