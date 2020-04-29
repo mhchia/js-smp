@@ -1,12 +1,12 @@
 import BN from 'bn.js';
 import { sha256 } from 'js-sha256';
 
-import { ENDIAN } from './constants';
+import { MPI, concatUint8Array, Byte } from './msgs';
 
-export function sha256ToInt(intSize: number, ...args: BN[]): BN {
-  let res: number[] = [];
+export function smpHash(version: number, ...args: BN[]): BN {
+  let res = new Byte(version).serialize();
   for (const arg of args) {
-    res = res.concat(arg.toArray(ENDIAN, intSize));
+    res = concatUint8Array(res, new MPI(arg).serialize());
   }
   return new BN(sha256(res), 'hex');
 }

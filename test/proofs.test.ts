@@ -10,12 +10,13 @@ import {
 } from '../src/proofs';
 import { defaultConfig } from '../src/config';
 import { secretFactory, multiplicativeGroupFactory } from '../src/factories';
-import { sha256ToInt } from '../src/hash';
+import { smpHash } from '../src/hash';
 
 const q = defaultConfig.q;
+const version = 1;
 
 function hash(...args: BN[]): BN {
-  return sha256ToInt(defaultConfig.modulusSize, ...args);
+  return smpHash(version, ...args);
 }
 
 // TODO: Add failure cases
