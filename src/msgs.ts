@@ -19,12 +19,12 @@ abstract class BaseSerializable {
   abstract serialize(): Uint8Array;
 }
 
-class BaseFixedIntClass extends BaseSerializable {
+class BaseFixedInt extends BaseSerializable {
   static size: number;
   constructor(readonly value: number) {
     super();
   }
-  static deserialize(_: Uint8Array): BaseFixedIntClass {
+  static deserialize(_: Uint8Array): BaseFixedInt {
     throw new NotImplemented(); // Make tsc happy
   }
   serialize(): Uint8Array {
@@ -51,15 +51,12 @@ function concatUint8Array(a: Uint8Array, b: Uint8Array): Uint8Array {
   return c;
 }
 
-function createFixedIntClass(size: number): typeof BaseFixedIntClass {
-  class FixedIntClass extends BaseFixedIntClass {
+function createFixedIntClass(size: number): typeof BaseFixedInt {
+  class FixedIntClass extends BaseFixedInt {
     static size: number = size;
 
     static deserialize(bytes: Uint8Array): FixedIntClass {
       if (bytes.length !== size) {
-        console.log(
-          `!@# createFixedIntClass: bytes.length=${bytes.length}, size=${size}`
-        );
         throw new ValueError();
       }
       return new FixedIntClass(uint8ArrayToNumber(bytes));
@@ -112,7 +109,7 @@ class MPI implements BaseSerializable {
 }
 
 class TLV extends BaseSerializable {
-  constructor(readonly type: BaseFixedIntClass, readonly value: Uint8Array) {
+  constructor(readonly type: BaseFixedInt, readonly value: Uint8Array) {
     super();
   }
 
@@ -184,7 +181,7 @@ function deserializeSMPTLV(tlv: TLV): MPI[] {
 }
 
 function serializeSMPTLV(
-  type: BaseFixedIntClass,
+  type: BaseFixedInt,
   ...elements: (BN | MultiplicativeGroup)[]
 ): TLV {
   const length = new Int(elements.length);
@@ -203,7 +200,7 @@ function serializeSMPTLV(
 
 abstract class BaseSMPMessage {
   static getMPIsfromTLV(
-    type: BaseFixedIntClass,
+    type: BaseFixedInt,
     expectedLength: number,
     tlv: TLV
   ): MPI[] {
@@ -401,6 +398,7 @@ class SMPMessage4 extends BaseSMPMessage {
 }
 
 export {
+  BaseFixedInt,
   BaseSMPMessage,
   SMPMessage1,
   SMPMessage2,
