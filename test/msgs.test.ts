@@ -1,14 +1,14 @@
+import * as TCP from 'net';
 import BN from 'bn.js';
 
 import { Byte, Short, Int, MPI, TLV, concatUint8Array } from '../src/msgs';
-import { ValueError } from '../src/exceptions';
+import { ValueError, FailedToReadData } from '../src/exceptions';
 
-// TODO: Add failure cases
 // TODO: Add tests for `SMPMessage`s
 
 describe('Fixed types', () => {
   const types = [Byte, Short, Int];
-  test('hardcoded test', () => {
+  test('succeeds', () => {
     const expectedSize = [1, 2, 4];
     const expectedValue = [255, 255, 255];
     const expectedSerialized = [
@@ -45,7 +45,7 @@ describe('Fixed types', () => {
 });
 
 describe('MPI(variable-length integer)', () => {
-  test('hardcoded test', () => {
+  test('succeeds', () => {
     const values = [
       new BN(0),
       new BN(256),
@@ -102,18 +102,18 @@ describe('MPI(variable-length integer)', () => {
 });
 
 describe('TLV', () => {
-  const types = [new Short(3), new Short(5), new Short(7)];
-  const values = [
-    new Uint8Array([5566, 5577]),
-    new Uint8Array([1, 2, 3, 4, 5]),
-    new Uint8Array([]),
-  ];
-  const expectedSerialized = [
-    new Uint8Array([0, 3, 0, 2, 5566, 5577]),
-    new Uint8Array([0, 5, 0, 5, 1, 2, 3, 4, 5]),
-    new Uint8Array([0, 7, 0, 0]),
-  ];
-  test('hardcoded test', () => {
+  test('succeeds', () => {
+    const types = [new Short(3), new Short(5), new Short(7)];
+    const values = [
+      new Uint8Array([5566, 5577]),
+      new Uint8Array([1, 2, 3, 4, 5]),
+      new Uint8Array([]),
+    ];
+    const expectedSerialized = [
+      new Uint8Array([0, 3, 0, 2, 5566, 5577]),
+      new Uint8Array([0, 5, 0, 5, 1, 2, 3, 4, 5]),
+      new Uint8Array([0, 7, 0, 0]),
+    ];
     for (const index in values) {
       const type = types[index];
       const value = values[index];
@@ -124,5 +124,50 @@ describe('TLV', () => {
       expect(tlvFromExpected.type.value).toEqual(tlv.type.value);
       expect(tlvFromExpected.value).toEqual(tlv.value);
     }
+  });
+
+  test('readFromSocket', async () => {
+    const sendTLV = async (bytes: Uint8Array): Promise<void> => {
+      const ip = '127.0.0.1';
+      const port = 4000;
+
+      const server = TCP.createServer((sock: TCP.Socket) => {
+        sock.write(bytes);
+      });
+      server.listen(port, ip);
+      const sockClient = new TCP.Socket();
+      return new Promise((resolve, reject) => {
+        sockClient.connect(port, ip, () => {});
+        sockClient.on('readable', () => {
+          try {
+            TLV.readFromSocket(sockClient);
+          } catch (e) {
+            reject(e);
+          } finally {
+            server.close();
+            sockClient.destroy();
+          }
+          resolve();
+        });
+      });
+    };
+    // Correct format
+    const correctBytes = new Uint8Array([0, 0, 0, 2, 2, 3]);
+    await sendTLV(correctBytes);
+    // Wrong format
+    const corruptedBytes = new Uint8Array([0, 0, 0, 2, 2]);
+    await expect(sendTLV(corruptedBytes)).rejects.toThrowError(
+      FailedToReadData
+    );
+  });
+  test('deserialize fails', () => {
+    // Empty
+    expect(() => {
+      TLV.deserialize(new Uint8Array([]));
+    }).toThrowError(ValueError);
+    // Wrong length
+    expect(() => {
+      TLV.deserialize(new Uint8Array([0, 0, 0, 3, 1, 1]));
+    }).toThrowError(ValueError);
   });
 });
