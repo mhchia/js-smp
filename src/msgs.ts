@@ -212,6 +212,8 @@ function serializeSMPTLV(
 }
 
 abstract class BaseSMPMessage {
+  abstract wireValues: (BN | MultiplicativeGroup)[];
+
   static getMPIsfromTLV(
     type: BaseFixedInt,
     expectedLength: number,
