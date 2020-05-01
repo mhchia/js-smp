@@ -112,9 +112,13 @@ describe('MPI(variable-length integer)', () => {
     expect(() => {
       MPI.deserialize(new Uint8Array([]));
     }).toThrowError(ValueError);
-    // Wrong length
+    // Length too short
     expect(() => {
       MPI.deserialize(new Uint8Array([0, 0, 0, 1, 1, 1]));
+    }).toThrowError(ValueError);
+    // Length too long
+    expect(() => {
+      MPI.deserialize(new Uint8Array([0, 0, 0, 2, 0]));
     }).toThrowError(ValueError);
   });
 });
