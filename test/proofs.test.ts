@@ -44,10 +44,10 @@ function factoryExclude<T>(
 }
 
 function multiplicativeGroupFactoryExclude(
-  elements: MultiplicativeGroup[]
+  toBeExcluded: MultiplicativeGroup[]
 ): MultiplicativeGroup {
   return factoryExclude<MultiplicativeGroup>(
-    elements,
+    toBeExcluded,
     multiplicativeGroupFactory,
     (a: MultiplicativeGroup, b: MultiplicativeGroup) => a.equal(b)
   );
