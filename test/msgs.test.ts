@@ -149,7 +149,7 @@ describe('TLV', () => {
   });
 
   test('readFromSocket', async () => {
-    const sendTLV = async (bytes: Uint8Array): Promise<void> => {
+    const sendTLV = async (bytes: Uint8Array): Promise<TLV> => {
       const ip = '127.0.0.1';
       const port = 4000;
 
@@ -161,21 +161,24 @@ describe('TLV', () => {
       return new Promise((resolve, reject) => {
         sockClient.connect(port, ip, () => {});
         sockClient.on('readable', () => {
+          let tlv: TLV;
           try {
-            TLV.readFromSocket(sockClient);
+            tlv = TLV.readFromSocket(sockClient);
+            resolve(tlv);
           } catch (e) {
             reject(e);
           } finally {
             server.close();
             sockClient.destroy();
           }
-          resolve();
         });
       });
     };
     // Correct format
     const correctBytes = new Uint8Array([0, 0, 0, 2, 2, 3]);
-    await sendTLV(correctBytes);
+    const tlv = await sendTLV(correctBytes);
+    expect(tlv.type.value).toEqual(0);
+    expect(tlv.value).toEqual(new Uint8Array([2, 3]));
     // Wrong format
     const corruptedBytes = new Uint8Array([0, 0, 0, 2, 2]);
     await expect(sendTLV(corruptedBytes)).rejects.toThrowError(
