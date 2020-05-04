@@ -1,11 +1,33 @@
+/**
+ * Introduction to the proof algorithms can be found in
+ *  - section APPENDIX  in https://cypherpunks.ca/~iang/pubs/impauth.pdf
+ *  - section 2 in https://www.win.tue.nl/~berry/papers/dam.pdf
+ * Implementation details can be found in the OTR spec version 3
+ *  - https://otr.cypherpunks.ca/Protocol-v3-4.1.1.html
+ * @packageDocumentation
+ */
+
 import BN from 'bn.js';
 
 import { MultiplicativeGroup } from './multiplicativeGroup';
 
 type THashFunc = (...args: BN[]) => BN;
 
+/**
+ * Proof of discrete log based on Schnorr’s protocol, which proves that we know `x`
+ * s.t. `y = g**x` without leaking x.
+ */
 type ProofDiscreteLog = { c: BN; d: BN };
+/**
+ * Proof of equality of discrete coordinates based on Boudot, Schoenmakers and Traoré’s extension
+ * to a protocol by Chaum and Pedersen. The proof proves that given `g0`, `g1`, `g2`, `y0` and `y1`,
+ * we know `x0` and `x1` s.t. `y0 = g0**x0` and `y1 = (g1**x0)*(g2**x1)`.
+ */
 type ProofEqualDiscreteCoordinates = { c: BN; d0: BN; d1: BN };
+/**
+ * Proof of equality of two discrete logs, i.e. given `g0`, `g1`, `y0` and `y1`, we know `x0` s.t.
+ * `y0 = g0**x0` and `y1 = g1**x1`. It's based on the protocol by Chaum and Pedersen.
+ */
 type ProofEqualDiscreteLogs = { c: BN; d: BN };
 
 function makeProofDiscreteLog(

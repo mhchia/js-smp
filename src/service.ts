@@ -4,7 +4,7 @@ import BN from 'bn.js';
 
 import { Config, defaultConfig } from './config';
 import { SMPStateMachine, TypeTLVOrNull } from './smp';
-import { TLV } from './dataTypes';
+import { TLV } from './msgs';
 import { FailedToReadData, SMPStateError } from './exceptions';
 
 const sleep = (ms: number) => new Promise(res => setTimeout(res, ms));

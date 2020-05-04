@@ -29,7 +29,7 @@ import {
 
 import { SMPMessage1, SMPMessage2, SMPMessage3, SMPMessage4 } from './msgs';
 
-import { TLV } from './dataTypes';
+import { TLV } from './msgs';
 
 type TypeTLVOrNull = TLV | null;
 

@@ -1,11 +1,9 @@
-import * as TCP from 'net';
-
 import { MultiplicativeGroup } from './multiplicativeGroup';
 import { ENDIAN } from './constants';
 import BN from 'bn.js';
 
 import { concatUint8Array } from './utils';
-import { NotImplemented, ValueError, FailedToReadData } from './exceptions';
+import { NotImplemented, ValueError } from './exceptions';
 
 // NOTE: a workaround type to make typing work with `createFixedIntClass`.
 abstract class BaseSerializable {
@@ -68,17 +66,30 @@ function createFixedIntClass(size: number): typeof BaseFixedInt {
 }
 
 /**
- * Returns the average of two numbers.
-
- * @param x - The first input number
- * @param y - The second input number
- * @returns The arithmetic mean of `x` and `y`
- *
+ * Bytes (BYTE):
+ *  1 byte unsigned value
  */
 const Byte = createFixedIntClass(1);
+
+/**
+ * Shorts (SHORT):
+ *  2 byte unsigned value, big-endian
+ */
 const Short = createFixedIntClass(2);
+
+/**
+ * Ints (INT):
+ *  4 byte unsigned value, big-endian
+ */
 const Int = createFixedIntClass(4);
 
+/**
+ * Multi-precision integers (MPI):
+ *  4 byte unsigned len, big-endian
+ *  len byte unsigned value, big-endian
+ *  (MPIs must use the minimum-length encoding; i.e. no leading 0x00 bytes.
+ *  This is important when calculating public key fingerprints.)
+ */
 class MPI implements BaseSerializable {
   static lengthSize: number = 4;
 
@@ -118,63 +129,4 @@ class MPI implements BaseSerializable {
   }
 }
 
-class TLV extends BaseSerializable {
-  constructor(readonly type: BaseFixedInt, readonly value: Uint8Array) {
-    super();
-  }
-
-  static readFromSocket(socket: TCP.Socket): TLV {
-    const typeBytes = socket.read(Short.size);
-    if (
-      typeBytes === null ||
-      (typeBytes instanceof Buffer && typeBytes.length !== Short.size)
-    ) {
-      throw new FailedToReadData('failed to read type');
-    }
-    const type = Short.deserialize(typeBytes);
-    const lengthBytes = socket.read(Short.size);
-    if (
-      lengthBytes === null ||
-      (lengthBytes instanceof Buffer && lengthBytes.length !== Short.size)
-    ) {
-      throw new FailedToReadData('failed to read length');
-    }
-    const length = Short.deserialize(lengthBytes).value;
-    const valueBytes = socket.read(length);
-    if (
-      valueBytes === null ||
-      (valueBytes instanceof Buffer && valueBytes.length !== length)
-    ) {
-      throw new FailedToReadData('failed to read value');
-    }
-    const value = new Uint8Array(valueBytes);
-    return new TLV(type, value);
-  }
-
-  static deserialize(bytes: Uint8Array): TLV {
-    const typeSize = Short.size;
-    const lengthSize = Short.size;
-    const type = Short.deserialize(bytes.slice(0, typeSize));
-    const length = Short.deserialize(
-      bytes.slice(typeSize, typeSize + lengthSize)
-    );
-    const expectedTLVTotalSize = typeSize + lengthSize + length.value;
-    if (bytes.length < expectedTLVTotalSize) {
-      throw new ValueError('`bytes` does not long enough');
-    }
-    const value = bytes.slice(typeSize + lengthSize, expectedTLVTotalSize);
-    return new TLV(type, value);
-  }
-
-  serialize(): Uint8Array {
-    const typeBytes = this.type.serialize();
-    const lengthBytes = new Short(this.value.length).serialize();
-    const valueBytes = this.value;
-    return concatUint8Array(
-      concatUint8Array(typeBytes, lengthBytes),
-      valueBytes
-    );
-  }
-}
-
-export { BaseFixedInt, Byte, Short, Int, MPI, TLV };
+export { BaseSerializable, BaseFixedInt, Byte, Short, Int, MPI };

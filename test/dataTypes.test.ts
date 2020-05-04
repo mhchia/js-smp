@@ -1,9 +1,8 @@
-import * as TCP from 'net';
 import BN from 'bn.js';
 
 import { concatUint8Array } from '../src/utils';
-import { Byte, Short, Int, MPI, TLV } from '../src/dataTypes';
-import { ValueError, FailedToReadData } from '../src/exceptions';
+import { Byte, Short, Int, MPI } from '../src/dataTypes';
+import { ValueError } from '../src/exceptions';
 
 describe('Fixed types', () => {
   const types = [Byte, Short, Int];
@@ -100,80 +99,6 @@ describe('MPI(variable-length integer)', () => {
     // Length too long
     expect(() => {
       MPI.deserialize(new Uint8Array([0, 0, 0, 2, 0]));
-    }).toThrowError(ValueError);
-  });
-});
-
-describe('TLV', () => {
-  test('succeeds', () => {
-    const types = [new Short(3), new Short(5), new Short(7)];
-    const values = [
-      new Uint8Array([5566, 5577]),
-      new Uint8Array([1, 2, 3, 4, 5]),
-      new Uint8Array([]),
-    ];
-    const expectedSerialized = [
-      new Uint8Array([0, 3, 0, 2, 5566, 5577]),
-      new Uint8Array([0, 5, 0, 5, 1, 2, 3, 4, 5]),
-      new Uint8Array([0, 7, 0, 0]),
-    ];
-    for (const index in values) {
-      const type = types[index];
-      const value = values[index];
-      const tlv = new TLV(type, value);
-      const expected = expectedSerialized[index];
-      expect(tlv.serialize()).toEqual(expected);
-      const tlvFromExpected = TLV.deserialize(expected);
-      expect(tlvFromExpected.type.value).toEqual(tlv.type.value);
-      expect(tlvFromExpected.value).toEqual(tlv.value);
-    }
-  });
-
-  test('readFromSocket', async () => {
-    const sendTLV = async (bytes: Uint8Array): Promise<TLV> => {
-      const ip = '127.0.0.1';
-      const port = 4000;
-
-      const server = TCP.createServer((sock: TCP.Socket) => {
-        sock.write(bytes);
-      });
-      server.listen(port, ip);
-      const sockClient = new TCP.Socket();
-      return new Promise((resolve, reject) => {
-        sockClient.connect(port, ip, () => {});
-        sockClient.on('readable', () => {
-          let tlv: TLV;
-          try {
-            tlv = TLV.readFromSocket(sockClient);
-            resolve(tlv);
-          } catch (e) {
-            reject(e);
-          } finally {
-            server.close();
-            sockClient.destroy();
-          }
-        });
-      });
-    };
-    // Correct format
-    const correctBytes = new Uint8Array([0, 0, 0, 2, 2, 3]);
-    const tlv = await sendTLV(correctBytes);
-    expect(tlv.type.value).toEqual(0);
-    expect(tlv.value).toEqual(new Uint8Array([2, 3]));
-    // Wrong format
-    const corruptedBytes = new Uint8Array([0, 0, 0, 2, 2]);
-    await expect(sendTLV(corruptedBytes)).rejects.toThrowError(
-      FailedToReadData
-    );
-  });
-  test('deserialize fails', () => {
-    // Empty
-    expect(() => {
-      TLV.deserialize(new Uint8Array([]));
-    }).toThrowError(ValueError);
-    // Wrong length
-    expect(() => {
-      TLV.deserialize(new Uint8Array([0, 0, 0, 3, 1, 1]));
     }).toThrowError(ValueError);
   });
 });

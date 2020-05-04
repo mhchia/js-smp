@@ -1,15 +1,111 @@
+import * as TCP from 'net';
+
+import BN from 'bn.js';
+
+import { FailedToReadData } from './exceptions';
+
 import { MultiplicativeGroup } from './multiplicativeGroup';
 import {
   ProofDiscreteLog,
   ProofEqualDiscreteCoordinates,
   ProofEqualDiscreteLogs,
 } from './proofs';
-import BN from 'bn.js';
 
-import { BaseFixedInt, Short, Int, MPI, TLV } from './dataTypes';
+import { BaseFixedInt, BaseSerializable, Short, Int, MPI } from './dataTypes';
 
 import { concatUint8Array } from './utils';
 import { NotImplemented, ValueError } from './exceptions';
+
+/**
+ * TLV record is of the form:
+ *  Type (SHORT)
+ *    The type of this record. Records with unrecognized types should be ignored.
+ *  Length (SHORT)
+ *    The length of the following field
+ *  Value (len BYTEs) [where len is the value of the Length field]
+ *    Any pertinent data for the record type.
+ */
+class TLV extends BaseSerializable {
+  // No need to store `length` since it is implied in `value`.
+  constructor(readonly type: BaseFixedInt, readonly value: Uint8Array) {
+    super();
+  }
+
+  static readFromSocket(socket: TCP.Socket): TLV {
+    const typeBytes = socket.read(Short.size);
+    if (
+      typeBytes === null ||
+      (typeBytes instanceof Buffer && typeBytes.length !== Short.size)
+    ) {
+      throw new FailedToReadData('failed to read type');
+    }
+    const type = Short.deserialize(typeBytes);
+    const lengthBytes = socket.read(Short.size);
+    if (
+      lengthBytes === null ||
+      (lengthBytes instanceof Buffer && lengthBytes.length !== Short.size)
+    ) {
+      throw new FailedToReadData('failed to read length');
+    }
+    const length = Short.deserialize(lengthBytes).value;
+    const valueBytes = socket.read(length);
+    if (
+      valueBytes === null ||
+      (valueBytes instanceof Buffer && valueBytes.length !== length)
+    ) {
+      throw new FailedToReadData('failed to read value');
+    }
+    const value = new Uint8Array(valueBytes);
+    return new TLV(type, value);
+  }
+
+  static deserialize(bytes: Uint8Array): TLV {
+    const typeSize = Short.size;
+    const lengthSize = Short.size;
+    const type = Short.deserialize(bytes.slice(0, typeSize));
+    const length = Short.deserialize(
+      bytes.slice(typeSize, typeSize + lengthSize)
+    );
+    const expectedTLVTotalSize = typeSize + lengthSize + length.value;
+    if (bytes.length < expectedTLVTotalSize) {
+      throw new ValueError('`bytes` does not long enough');
+    }
+    const value = bytes.slice(typeSize + lengthSize, expectedTLVTotalSize);
+    return new TLV(type, value);
+  }
+
+  serialize(): Uint8Array {
+    const typeBytes = this.type.serialize();
+    const lengthBytes = new Short(this.value.length).serialize();
+    const valueBytes = this.value;
+    return concatUint8Array(
+      concatUint8Array(typeBytes, lengthBytes),
+      valueBytes
+    );
+  }
+}
+
+/* TLV types */
+/**
+ * Type 2: SMP Message 1
+ *  The value represents an initiating message of the Socialist Millionaires' Protocol.
+ */
+const TLVTypeSMPMessage1 = new Short(2);
+/**
+ * Type 3: SMP Message 2
+ *  The value represents the second message in an instance of SMP.
+ */
+const TLVTypeSMPMessage2 = new Short(3);
+/**
+ * Type 4: SMP Message 3
+ *  The value represents the third message in an instance of SMP.
+ */
+const TLVTypeSMPMessage3 = new Short(4);
+/**
+ * Type 5: SMP Message 4
+ *  The value represents the final message in an instance of SMP.
+ */
+const TLVTypeSMPMessage4 = new Short(5);
 
 function deserializeSMPTLV(tlv: TLV): MPI[] {
   let bytes = tlv.value;
@@ -42,6 +138,16 @@ function serializeSMPTLV(
   return new TLV(type, res);
 }
 
+/**
+ * SMP Message TLVs (types 2-5) all carry data sharing the same general format:
+ *  MPI count (INT)
+ *    The number of MPIs contained in the remainder of the TLV.
+ *  MPI 1 (MPI)
+ *    The first MPI of the TLV, serialized into a byte array.
+ *  MPI 2 (MPI)
+ *    The second MPI of the TLV, serialized into a byte array.
+ *  ,...etc.
+ */
 abstract class BaseSMPMessage {
   abstract wireValues: (BN | MultiplicativeGroup)[];
 
@@ -71,11 +177,20 @@ abstract class BaseSMPMessage {
   abstract toTLV(): TLV;
 }
 
-const TLVTypeSMPMessage1 = new Short(2);
-const TLVTypeSMPMessage2 = new Short(3);
-const TLVTypeSMPMessage3 = new Short(4);
-const TLVTypeSMPMessage4 = new Short(5);
-
+/**
+ * SMP message 1 is sent by Alice to begin a DH exchange to determine two new generators, g2 and g3.
+ * It contains the following mpi values:
+ *  g2a
+ *    Alice's half of the DH exchange to determine g2.
+ *  c2, D2
+ *    A zero-knowledge proof that Alice knows the exponent associated with her transmitted value
+ *    g2a.
+ *  g3a
+ *    Alice's half of the DH exchange to determine g3.
+ *  c3, D3
+ *    A zero-knowledge proof that Alice knows the exponent associated with her transmitted value
+ *    g3a.
+ */
 class SMPMessage1 extends BaseSMPMessage {
   wireValues: [MultiplicativeGroup, BN, BN, MultiplicativeGroup, BN, BN];
 
@@ -111,6 +226,24 @@ class SMPMessage1 extends BaseSMPMessage {
   }
 }
 
+/**
+ * SMP message 2 is sent by Bob to complete the DH exchange to determine the new generators,
+ * g2 and g3. It also begins the construction of the values used in the final comparison of
+ * the protocol. It contains the following mpi values:
+ *  g2b
+ *    Bob's half of the DH exchange to determine g2.
+ *  c2, D2
+ *    A zero-knowledge proof that Bob knows the exponent associated with his transmitted value g2b.
+ *  g3b
+ *    Bob's half of the DH exchange to determine g3.
+ *  c3, D3
+ *    A zero-knowledge proof that Bob knows the exponent associated with his transmitted value g3b.
+ *  Pb, Qb
+ *    These values are used in the final comparison to determine if Alice and Bob share the
+ *    same secret.
+ *  cP, D5, D6
+ *    A zero-knowledge proof that Pb and Qb were created according to the protcol given above.
+ */
 class SMPMessage2 extends BaseSMPMessage {
   wireValues: [
     MultiplicativeGroup,
@@ -169,6 +302,20 @@ class SMPMessage2 extends BaseSMPMessage {
   }
 }
 
+/**
+ * SMP message 3 is Alice's final message in the SMP exchange. It has the last of the information
+ * required by Bob to determine if x = y. It contains the following mpi values:
+ *  Pa, Qa
+ *    These values are used in the final comparison to determine if Alice and Bob share the
+ *    same secret.
+ *  cP, D5, D6
+ *    A zero-knowledge proof that Pa and Qa were created according to the protcol given above.
+ *  Ra
+ *    This value is used in the final comparison to determine if Alice and Bob share
+ *    the same secret.
+ *  cR, D7
+ *    A zero-knowledge proof that Ra was created according to the protcol given above.
+ */
 class SMPMessage3 extends BaseSMPMessage {
   wireValues: [
     MultiplicativeGroup,
@@ -217,6 +364,15 @@ class SMPMessage3 extends BaseSMPMessage {
   }
 }
 
+/**
+ * SMP message 4 is Bob's final message in the SMP exchange. It has the last of the information
+ * required by Alice to determine if x = y. It contains the following mpi values:
+ *  Rb
+ *    This value is used in the final comparison to determine if Alice and Bob share the
+ *    same secret.
+ *  cR, D7
+ *    A zero-knowledge proof that Rb was created according to the protcol given above.
+ */
 class SMPMessage4 extends BaseSMPMessage {
   wireValues: [MultiplicativeGroup, BN, BN];
   constructor(
@@ -240,4 +396,11 @@ class SMPMessage4 extends BaseSMPMessage {
   }
 }
 
-export { BaseSMPMessage, SMPMessage1, SMPMessage2, SMPMessage3, SMPMessage4 };
+export {
+  BaseSMPMessage,
+  SMPMessage1,
+  SMPMessage2,
+  SMPMessage3,
+  SMPMessage4,
+  TLV,
+};
