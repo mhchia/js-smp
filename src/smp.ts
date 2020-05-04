@@ -27,13 +27,9 @@ import {
   SMPNotFinished,
 } from './exceptions';
 
-import {
-  SMPMessage1,
-  SMPMessage2,
-  SMPMessage3,
-  SMPMessage4,
-  TLV,
-} from './msgs';
+import { SMPMessage1, SMPMessage2, SMPMessage3, SMPMessage4 } from './msgs';
+
+import { TLV } from './dataTypes';
 
 type TypeTLVOrNull = TLV | null;
 
