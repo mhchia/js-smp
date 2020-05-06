@@ -1,118 +1,33 @@
 import * as TCP from 'net';
 
+import BN from 'bn.js';
+
+import { FailedToReadData } from './exceptions';
+
 import { MultiplicativeGroup } from './multiplicativeGroup';
 import {
   ProofDiscreteLog,
   ProofEqualDiscreteCoordinates,
   ProofEqualDiscreteLogs,
 } from './proofs';
-import { ENDIAN } from './constants';
-import BN from 'bn.js';
 
-import { NotImplemented, ValueError, FailedToReadData } from './exceptions';
+import { BaseFixedInt, BaseSerializable, Short, Int, MPI } from './dataTypes';
 
-// NOTE: a workaround type to make typing work with `createFixedIntClass`.
-abstract class BaseSerializable {
-  static deserialize(_: Uint8Array): BaseSerializable {
-    throw new NotImplemented(); // Make tsc happy
-  }
-  abstract serialize(): Uint8Array;
-}
+import { concatUint8Array } from './utils';
+import { NotImplemented, ValueError } from './exceptions';
 
-class BaseFixedIntClass extends BaseSerializable {
-  static size: number;
-  constructor(readonly value: number) {
-    super();
-  }
-  static deserialize(_: Uint8Array): BaseFixedIntClass {
-    throw new NotImplemented(); // Make tsc happy
-  }
-  serialize(): Uint8Array {
-    throw new NotImplemented(); // Make tsc happy
-  }
-}
-
-function numberToUint8Array(value: number, size?: number): Uint8Array {
-  return new Uint8Array(new BN(value).toArray(ENDIAN, size));
-}
-
-function uint8ArrayToNumber(a: Uint8Array): number {
-  // the max value of `number` type is `2**53 - 1`
-  if (a.length > 6) {
-    throw new ValueError();
-  }
-  return new BN(a).toNumber();
-}
-
-function concatUint8Array(a: Uint8Array, b: Uint8Array): Uint8Array {
-  let c = new Uint8Array(a.length + b.length);
-  c.set(a);
-  c.set(b, a.length);
-  return c;
-}
-
-function createFixedIntClass(size: number): typeof BaseFixedIntClass {
-  class FixedIntClass extends BaseFixedIntClass {
-    static size: number = size;
-
-    static deserialize(bytes: Uint8Array): FixedIntClass {
-      if (bytes.length !== size) {
-        console.log(
-          `!@# createFixedIntClass: bytes.length=${bytes.length}, size=${size}`
-        );
-        throw new ValueError();
-      }
-      return new FixedIntClass(uint8ArrayToNumber(bytes));
-    }
-
-    serialize(): Uint8Array {
-      return numberToUint8Array(this.value, size);
-    }
-  }
-  return FixedIntClass;
-}
-
-const Byte = createFixedIntClass(1);
-const Short = createFixedIntClass(2);
-const Int = createFixedIntClass(4);
-
-class MPI implements BaseSerializable {
-  static lengthSize: number = 4;
-
-  constructor(readonly value: BN) {}
-
-  serialize(): Uint8Array {
-    const bytes = new Uint8Array(this.value.toArray(ENDIAN));
-    const lenBytes = numberToUint8Array(bytes.length, MPI.lengthSize);
-    return concatUint8Array(lenBytes, bytes);
-  }
-
-  static consume(bytes: Uint8Array): [MPI, Uint8Array] {
-    const len = uint8ArrayToNumber(bytes.slice(0, this.lengthSize));
-    if (bytes.length < this.lengthSize + len) {
-      throw new ValueError('`bytes` does not long enough for `len`');
-    }
-    const value = new BN(bytes.slice(this.lengthSize, this.lengthSize + len));
-    return [new MPI(value), bytes.slice(this.lengthSize + len)];
-  }
-
-  static deserialize(bytes: Uint8Array): MPI {
-    const [mpi, bytesRemaining] = this.consume(bytes);
-    if (bytesRemaining.length !== 0) {
-      throw new ValueError(
-        `bytes=${bytes} contains redundant bytes: bytesRemaining=${bytesRemaining}`
-      );
-    }
-    return mpi;
-  }
-
-  static fromMultiplicativeGroup(g: MultiplicativeGroup): MPI {
-    return new MPI(g.value);
-  }
-}
-
+/**
+ * TLV record is of the form:
+ *  Type (SHORT)
+ *    The type of this record. Records with unrecognized types should be ignored.
+ *  Length (SHORT)
+ *    The length of the following field
+ *  Value (len BYTEs) [where len is the value of the Length field]
+ *    Any pertinent data for the record type.
+ */
 class TLV extends BaseSerializable {
-  constructor(readonly type: BaseFixedIntClass, readonly value: Uint8Array) {
+  // No need to store `length` since it is implied in `value`.
+  constructor(readonly type: BaseFixedInt, readonly value: Uint8Array) {
     super();
   }
 
@@ -170,6 +85,28 @@ class TLV extends BaseSerializable {
   }
 }
 
+/* TLV types */
+/**
+ * Type 2: SMP Message 1
+ *  The value represents an initiating message of the Socialist Millionaires' Protocol.
+ */
+const TLVTypeSMPMessage1 = new Short(2);
+/**
+ * Type 3: SMP Message 2
+ *  The value represents the second message in an instance of SMP.
+ */
+const TLVTypeSMPMessage2 = new Short(3);
+/**
+ * Type 4: SMP Message 3
+ *  The value represents the third message in an instance of SMP.
+ */
+const TLVTypeSMPMessage3 = new Short(4);
+/**
+ * Type 5: SMP Message 4
+ *  The value represents the final message in an instance of SMP.
+ */
+const TLVTypeSMPMessage4 = new Short(5);
+
 function deserializeSMPTLV(tlv: TLV): MPI[] {
   let bytes = tlv.value;
   const mpiCount = Int.deserialize(bytes.slice(0, Int.size));
@@ -184,7 +121,7 @@ function deserializeSMPTLV(tlv: TLV): MPI[] {
 }
 
 function serializeSMPTLV(
-  type: BaseFixedIntClass,
+  type: BaseFixedInt,
   ...elements: (BN | MultiplicativeGroup)[]
 ): TLV {
   const length = new Int(elements.length);
@@ -201,9 +138,21 @@ function serializeSMPTLV(
   return new TLV(type, res);
 }
 
+/**
+ * SMP Message TLVs (types 2-5) all carry data sharing the same general format:
+ *  MPI count (INT)
+ *    The number of MPIs contained in the remainder of the TLV.
+ *  MPI 1 (MPI)
+ *    The first MPI of the TLV, serialized into a byte array.
+ *  MPI 2 (MPI)
+ *    The second MPI of the TLV, serialized into a byte array.
+ *  ,...etc.
+ */
 abstract class BaseSMPMessage {
+  abstract wireValues: (BN | MultiplicativeGroup)[];
+
   static getMPIsfromTLV(
-    type: BaseFixedIntClass,
+    type: BaseFixedInt,
     expectedLength: number,
     tlv: TLV
   ): MPI[] {
@@ -228,14 +177,20 @@ abstract class BaseSMPMessage {
   abstract toTLV(): TLV;
 }
 
-// const TLVTypePadding = new Short(0);
-const TLVTypeSMPMessage1 = new Short(2);
-const TLVTypeSMPMessage2 = new Short(3);
-const TLVTypeSMPMessage3 = new Short(4);
-const TLVTypeSMPMessage4 = new Short(5);
-// const TLVTypeSMPMessageAbort = new Short(6);
-// const TLVTypeSMPMessage1Q = new Short(7);
-
+/**
+ * SMP message 1 is sent by Alice to begin a DH exchange to determine two new generators, g2 and g3.
+ * It contains the following mpi values:
+ *  g2a
+ *    Alice's half of the DH exchange to determine g2.
+ *  c2, D2
+ *    A zero-knowledge proof that Alice knows the exponent associated with her transmitted value
+ *    g2a.
+ *  g3a
+ *    Alice's half of the DH exchange to determine g3.
+ *  c3, D3
+ *    A zero-knowledge proof that Alice knows the exponent associated with her transmitted value
+ *    g3a.
+ */
 class SMPMessage1 extends BaseSMPMessage {
   wireValues: [MultiplicativeGroup, BN, BN, MultiplicativeGroup, BN, BN];
 
@@ -271,6 +226,24 @@ class SMPMessage1 extends BaseSMPMessage {
   }
 }
 
+/**
+ * SMP message 2 is sent by Bob to complete the DH exchange to determine the new generators,
+ * g2 and g3. It also begins the construction of the values used in the final comparison of
+ * the protocol. It contains the following mpi values:
+ *  g2b
+ *    Bob's half of the DH exchange to determine g2.
+ *  c2, D2
+ *    A zero-knowledge proof that Bob knows the exponent associated with his transmitted value g2b.
+ *  g3b
+ *    Bob's half of the DH exchange to determine g3.
+ *  c3, D3
+ *    A zero-knowledge proof that Bob knows the exponent associated with his transmitted value g3b.
+ *  Pb, Qb
+ *    These values are used in the final comparison to determine if Alice and Bob share the
+ *    same secret.
+ *  cP, D5, D6
+ *    A zero-knowledge proof that Pb and Qb were created according to the protcol given above.
+ */
 class SMPMessage2 extends BaseSMPMessage {
   wireValues: [
     MultiplicativeGroup,
@@ -329,6 +302,20 @@ class SMPMessage2 extends BaseSMPMessage {
   }
 }
 
+/**
+ * SMP message 3 is Alice's final message in the SMP exchange. It has the last of the information
+ * required by Bob to determine if x = y. It contains the following mpi values:
+ *  Pa, Qa
+ *    These values are used in the final comparison to determine if Alice and Bob share the
+ *    same secret.
+ *  cP, D5, D6
+ *    A zero-knowledge proof that Pa and Qa were created according to the protcol given above.
+ *  Ra
+ *    This value is used in the final comparison to determine if Alice and Bob share
+ *    the same secret.
+ *  cR, D7
+ *    A zero-knowledge proof that Ra was created according to the protcol given above.
+ */
 class SMPMessage3 extends BaseSMPMessage {
   wireValues: [
     MultiplicativeGroup,
@@ -377,6 +364,15 @@ class SMPMessage3 extends BaseSMPMessage {
   }
 }
 
+/**
+ * SMP message 4 is Bob's final message in the SMP exchange. It has the last of the information
+ * required by Alice to determine if x = y. It contains the following mpi values:
+ *  Rb
+ *    This value is used in the final comparison to determine if Alice and Bob share the
+ *    same secret.
+ *  cR, D7
+ *    A zero-knowledge proof that Rb was created according to the protcol given above.
+ */
 class SMPMessage4 extends BaseSMPMessage {
   wireValues: [MultiplicativeGroup, BN, BN];
   constructor(
@@ -406,9 +402,5 @@ export {
   SMPMessage2,
   SMPMessage3,
   SMPMessage4,
-  Byte,
-  Short,
-  Int,
-  MPI,
   TLV,
 };

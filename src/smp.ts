@@ -4,7 +4,7 @@ import BN from 'bn.js';
 
 import { MultiplicativeGroup } from './multiplicativeGroup';
 import { Config, defaultConfig } from './config';
-import { sha256ToInt } from './hash';
+import { smpHash } from './hash';
 
 import {
   makeProofDiscreteLog,
@@ -27,13 +27,9 @@ import {
   SMPNotFinished,
 } from './exceptions';
 
-import {
-  SMPMessage1,
-  SMPMessage2,
-  SMPMessage3,
-  SMPMessage4,
-  TLV,
-} from './msgs';
+import { SMPMessage1, SMPMessage2, SMPMessage3, SMPMessage4 } from './msgs';
+
+import { TLV } from './msgs';
 
 type TypeTLVOrNull = TLV | null;
 
@@ -56,9 +52,9 @@ abstract class BaseSMPState implements ISMPState {
   abstract transit(msg: TypeTLVOrNull): [ISMPState, TypeTLVOrNull];
   abstract getResult(): boolean | null;
 
-  getHashFunc(this: BaseSMPState, version: BN): THashFunc {
+  getHashFunc(version: number): THashFunc {
     return (...args: BN[]): BN => {
-      return sha256ToInt(this.config.modulusSize, version, ...args);
+      return smpHash(version, ...args);
     };
   }
 
@@ -68,7 +64,7 @@ abstract class BaseSMPState implements ISMPState {
   }
 
   makeDHPubkey(
-    version: BN,
+    version: number,
     secretKey: BN
   ): [MultiplicativeGroup, ProofDiscreteLog] {
     const pubkey = this.g1.exponentiate(secretKey);
@@ -83,7 +79,7 @@ abstract class BaseSMPState implements ISMPState {
   }
 
   verifyDHPubkey(
-    version: BN,
+    version: number,
     pubkey: MultiplicativeGroup,
     proof: ProofDiscreteLog
   ): boolean {
@@ -108,7 +104,7 @@ abstract class BaseSMPState implements ISMPState {
   }
 
   makePLQL(
-    version: BN,
+    version: number,
     g2: MultiplicativeGroup,
     g3: MultiplicativeGroup
   ): [MultiplicativeGroup, MultiplicativeGroup, ProofEqualDiscreteCoordinates] {
@@ -132,7 +128,7 @@ abstract class BaseSMPState implements ISMPState {
   }
 
   verifyPRQRProof(
-    version: BN,
+    version: number,
     g2: MultiplicativeGroup,
     g3: MultiplicativeGroup,
     pR: MultiplicativeGroup,
@@ -151,7 +147,7 @@ abstract class BaseSMPState implements ISMPState {
   }
 
   makeRL(
-    version: BN,
+    version: number,
     s3: BN,
     qa: MultiplicativeGroup,
     qb: MultiplicativeGroup
@@ -170,7 +166,7 @@ abstract class BaseSMPState implements ISMPState {
   }
 
   verifyRR(
-    version: BN,
+    version: number,
     g3R: MultiplicativeGroup,
     rR: MultiplicativeGroup,
     proof: ProofEqualDiscreteLogs,
@@ -207,8 +203,8 @@ class SMPState1 extends BaseSMPState {
   transit(tlv: TypeTLVOrNull): [ISMPState, TypeTLVOrNull] {
     if (tlv === null) {
       /* Step 0: Alice initaites smp, sending `g2a`, `g3a` to Bob. */
-      const [g2a, g2aProof] = this.makeDHPubkey(new BN(1), this.s2);
-      const [g3a, g3aProof] = this.makeDHPubkey(new BN(2), this.s3);
+      const [g2a, g2aProof] = this.makeDHPubkey(1, this.s2);
+      const [g3a, g3aProof] = this.makeDHPubkey(2, this.s3);
       const msg = new SMPMessage1(g2a, g2aProof, g3a, g3aProof);
       const state = new SMPState2(
         this.x,
@@ -233,18 +229,18 @@ class SMPState1 extends BaseSMPState {
         throw new InvalidElement();
       }
       // Verify the proofs
-      if (!this.verifyDHPubkey(new BN(1), msg.g2a, msg.g2aProof)) {
+      if (!this.verifyDHPubkey(1, msg.g2a, msg.g2aProof)) {
         throw new InvalidProof();
       }
-      if (!this.verifyDHPubkey(new BN(2), msg.g3a, msg.g3aProof)) {
+      if (!this.verifyDHPubkey(2, msg.g3a, msg.g3aProof)) {
         throw new InvalidProof();
       }
-      const [g2b, g2bProof] = this.makeDHPubkey(new BN(3), this.s2);
-      const [g3b, g3bProof] = this.makeDHPubkey(new BN(4), this.s3);
+      const [g2b, g2bProof] = this.makeDHPubkey(3, this.s2);
+      const [g3b, g3bProof] = this.makeDHPubkey(4, this.s3);
       const g2 = this.makeDHSharedSecret(msg.g2a, this.s2);
       const g3 = this.makeDHSharedSecret(msg.g3a, this.s3);
       // Make `Pb` and `Qb`
-      const [pb, qb, pbqbProof] = this.makePLQL(new BN(5), g2, g3);
+      const [pb, qb, pbqbProof] = this.makePLQL(5, g2, g3);
 
       const msg2 = new SMPMessage2(
         g2b,
@@ -306,24 +302,22 @@ class SMPState2 extends BaseSMPState {
     ) {
       throw new InvalidElement();
     }
-    if (!this.verifyDHPubkey(new BN(3), msg.g2b, msg.g2bProof)) {
+    if (!this.verifyDHPubkey(3, msg.g2b, msg.g2bProof)) {
       throw new InvalidProof();
     }
-    if (!this.verifyDHPubkey(new BN(4), msg.g3b, msg.g3bProof)) {
+    if (!this.verifyDHPubkey(4, msg.g3b, msg.g3bProof)) {
       throw new InvalidProof();
     }
     // Perform DH
     const g2 = this.makeDHSharedSecret(msg.g2b, this.s2);
     const g3 = this.makeDHSharedSecret(msg.g3b, this.s3);
-    if (
-      !this.verifyPRQRProof(new BN(5), g2, g3, msg.pb, msg.qb, msg.pbqbProof)
-    ) {
+    if (!this.verifyPRQRProof(5, g2, g3, msg.pb, msg.qb, msg.pbqbProof)) {
       throw new InvalidProof();
     }
     // Calculate `Pa` and `Qa`
-    const [pa, qa, paqaProof] = this.makePLQL(new BN(6), g2, g3);
+    const [pa, qa, paqaProof] = this.makePLQL(6, g2, g3);
     // Calculate `Ra`
-    const [ra, raProof] = this.makeRL(new BN(7), this.s3, qa, msg.qb);
+    const [ra, raProof] = this.makeRL(7, this.s3, qa, msg.qb);
 
     const msg3 = new SMPMessage3(pa, qa, paqaProof, ra, raProof);
     // Advance the step
@@ -387,24 +381,15 @@ class SMPState3 extends BaseSMPState {
       throw new InvalidElement();
     }
     if (
-      !this.verifyPRQRProof(
-        new BN(6),
-        this.g2,
-        this.g3,
-        msg.pa,
-        msg.qa,
-        msg.paqaProof
-      )
+      !this.verifyPRQRProof(6, this.g2, this.g3, msg.pa, msg.qa, msg.paqaProof)
     ) {
       throw new InvalidProof();
     }
     // `Ra`
-    if (
-      !this.verifyRR(new BN(7), this.g3R, msg.ra, msg.raProof, msg.qa, this.qL)
-    ) {
+    if (!this.verifyRR(7, this.g3R, msg.ra, msg.raProof, msg.qa, this.qL)) {
       throw new InvalidProof();
     }
-    const [rb, rbProof] = this.makeRL(new BN(8), this.s3, msg.qa, this.qL);
+    const [rb, rbProof] = this.makeRL(8, this.s3, msg.qa, this.qL);
     const msg4 = new SMPMessage4(rb, rbProof);
     const rab = this.makeRab(this.s3, msg.ra);
     const state = new SMPStateFinished(
@@ -454,9 +439,7 @@ class SMPState4 extends BaseSMPState {
     if (!this.verifyMultiplicativeGroup(msg.rb)) {
       throw new InvalidElement();
     }
-    if (
-      !this.verifyRR(new BN(8), this.g3R, msg.rb, msg.rbProof, this.qL, this.qR)
-    ) {
+    if (!this.verifyRR(8, this.g3R, msg.rb, msg.rbProof, this.qL, this.qR)) {
       throw new InvalidProof();
     }
     const rab = this.makeRab(this.s3, msg.rb);

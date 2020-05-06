@@ -1,5 +1,8 @@
 import BN from 'bn.js';
 
+/**
+ * A general interface of a [group element](https://en.wikipedia.org/wiki/Group_(mathematics)).
+ */
 interface IGroup {
   identity(): IGroup;
   operate(g: IGroup): IGroup;
@@ -8,6 +11,9 @@ interface IGroup {
   equal(g: IGroup): boolean;
 }
 
+/**
+ * A base class for a group element with `exponentiate` implemented.
+ */
 abstract class BaseGroup implements IGroup {
   abstract identity(): BaseGroup;
   abstract operate(g: BaseGroup): BaseGroup;
@@ -37,6 +43,9 @@ abstract class BaseGroup implements IGroup {
   }
 }
 
+/**
+ * An implementation of the [Multiplicative group of integer modulo n](https://en.wikipedia.org/wiki/Multiplicative_group_of_integers_modulo_n).
+ */
 class MultiplicativeGroup extends BaseGroup {
   constructor(readonly n: BN, readonly value: BN) {
     super();
