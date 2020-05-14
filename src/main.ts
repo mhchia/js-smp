@@ -35,7 +35,7 @@ function setTextareaValueWithParam(id: string, paramName: string): HTMLTextAreaE
 const localPeerElement = setTextareaValueWithParam(localPeerID, localPeerParamName);
 const remotePeerElement = setTextareaValueWithParam(remotePeerID, remotePeerParamName);
 const secretElement = setTextareaValueWithParam(secretID, secretParamName);
-console.log(secretElement);
+console.log(secretElement.value);
 const startButton = document.querySelector(`button#${startButtonID}`) as HTMLButtonElement;
 const connectButton = document.querySelector(`button#${connectButtonID}`) as HTMLButtonElement;
 

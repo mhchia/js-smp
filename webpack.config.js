@@ -2,7 +2,7 @@ module.exports = {
     entry: "./src/main.ts",
     output: {
         path: __dirname,
-        filename: "examples/webpack_bundle.js"
+        filename: "examples/static/webpack_bundle.js"
     },
     resolve: {
         extensions: [".tsx", ".ts", ".js", ".json"]
