@@ -4,7 +4,14 @@
 	<title>TypeScript and tsify</title>
 </head>
 <body>
-	<div id="app"></div>
-	<script type="module" src="bundle.js"></script>
+	<div id="container">
+		<label for="localPeer">Local PeerID: </label><textarea id="localPeer"></textarea><br>
+		<label for="remotePeer">Remote PeerID: </label><textarea id="remotePeer"></textarea><br>
+		<label for="secret">Secret: </label><textarea id="secret"></textarea>
+		<br><br><br>
+		<button id="startButton">Start</button>
+		<button id="connectButton">Connect</button>
+	</div>
+	<script src="bundle.js"></script>
 </body>
 </html>
