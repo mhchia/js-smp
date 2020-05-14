@@ -1,7 +1,6 @@
 {
   "include": ["src", "types", "bs.js"],
   "compilerOptions": {
-    "module": "es5",
     "lib": ["dom", "esnext"],
     "importHelpers": true,
     "declaration": true,

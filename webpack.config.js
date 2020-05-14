@@ -1,7 +1,16 @@
 module.exports = {
-    entry: "./src/main.js",
+    entry: "./src/main.ts",
     output: {
         path: __dirname,
-        filename: "webpack_bundle.js"
+        filename: "examples/webpack_bundle.js"
+    },
+    resolve: {
+        extensions: [".tsx", ".ts", ".js", ".json"]
+    },
+    module: {
+        rules: [
+            // all files with a '.ts' or '.tsx' extension will be handled by 'ts-loader'
+            { test: /\.tsx?$/, use: ["ts-loader"], exclude: /node_modules/ }
+        ]
     }
 }
