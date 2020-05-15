@@ -50,19 +50,19 @@ function startPeer() {
     // Ref: https://peerjs.com/docs.html#dataconnection
     conn.on('open', async () => {
       const stateMachine = new SMPStateMachine(new BN(secretElement.value));
-      // TODO: Add `timeout`
-      await waitUntilTrue(stateMachine.isFinished.bind(stateMachine));
-      console.log(
-        `Finished SMP with ${conn.peer}: result=${stateMachine.getResult()}`
-      );
 
-      // Emitted when data is received from the remote peer.
-      conn.on('data', createConnDataHandler(stateMachine, conn));
       // Emitted when either you or the remote peer closes the data connection.
       // Not supported by Firefox.
       // conn.on('close', () => {});
       // Emitted when error occurs.
       // conn.on('error', () => {});
+      // Emitted when data is received from the remote peer.
+      conn.on('data', createConnDataHandler(stateMachine, conn));
+      // TODO: Add `timeout`
+      await waitUntilTrue(stateMachine.isFinished.bind(stateMachine));
+      console.log(
+        `Finished SMP with ${conn.peer}: result=${stateMachine.getResult()}`
+      );
     });
   });
 }
@@ -72,7 +72,7 @@ function connectRemotePeer() {
     throw new Error("localPeer hasn't been initialized");
   }
   conn = localPeer.connect(remotePeerElement.value, { reliable: true });
-  console.log(`connecting ${remotePeerElement.value}...`);
+  console.log(`Connecting ${remotePeerElement.value}...`);
   conn.on('open', async () => {
     console.log(`Connection to ${conn.peer} is ready.`);
 
