@@ -1,11 +1,12 @@
 {
-  "include": ["src", "types", "bs.js"],
+  "include": ["src"],
+  "exclude": ["node_modules", "test"],
   "compilerOptions": {
-    "lib": ["dom", "esnext"],
-    "importHelpers": true,
+    "target": "es5",
+    "outDir": "./lib",
+    "module": "commonjs",
     "declaration": true,
     "sourceMap": true,
-    "rootDir": "./src",
     "strict": true,
     "noImplicitAny": true,
     "strictNullChecks": true,
@@ -17,12 +18,6 @@
     "noUnusedParameters": true,
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
-    "moduleResolution": "node",
-    "baseUrl": "./",
-    "paths": {
-      "*": ["src/*", "node_modules/*"]
-    },
-    "jsx": "react",
-    "esModuleInterop": true
+    "esModuleInterop": true,
   }
 }
