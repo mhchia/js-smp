@@ -1,7 +1,7 @@
 {
   "name": "js-smp",
   "description": "A typescript implementation of Socialist Millionaire Problem Protocol in Off-the-record Messaging(OTR) version 3",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "license": "MIT",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
