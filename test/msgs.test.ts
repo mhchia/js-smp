@@ -1,6 +1,5 @@
 import BN from 'bn.js';
 
-import { smpHash } from '../src/hash';
 import { Short } from '../src/dataTypes';
 import {
   BaseSMPMessage,
@@ -10,14 +9,15 @@ import {
   SMPMessage4,
   TLV,
 } from '../src/msgs';
-import { multiplicativeGroupFactory, secretFactory } from '../src/factories';
+import {
+  smpMessage1Factory,
+  smpMessage2Factory,
+  smpMessage3Factory,
+  smpMessage4Factory,
+} from '../src/factories';
 import { ValueError } from '../src/exceptions';
 import { MultiplicativeGroup } from '../src/multiplicativeGroup';
-import {
-  makeProofDiscreteLog,
-  makeProofEqualDiscreteCoordinates,
-  makeProofEqualDiscreteLogs,
-} from '../src/proofs';
+import { defaultConfig } from '../src/config';
 
 describe('TLV', () => {
   test('succeeds', () => {
@@ -122,13 +122,8 @@ describe('BaseSMPMessage', () => {
   });
 });
 
-const version = 1;
-
-function hash(...args: BN[]): BN {
-  return smpHash(version, ...args);
-}
-
 describe('SMPMessages', () => {
+  const q = defaultConfig.q;
   const areSMPMessagesEqual = (
     a: BaseSMPMessage,
     b: BaseSMPMessage
@@ -152,55 +147,27 @@ describe('SMPMessages', () => {
     }
     return true;
   };
-  const g = multiplicativeGroupFactory();
-  const bn = secretFactory();
-  const q = secretFactory();
-  const proofDiscreteLog = makeProofDiscreteLog(hash, g, bn, bn, q);
-  const proofEDC = makeProofEqualDiscreteCoordinates(
-    hash,
-    g,
-    g,
-    g,
-    bn,
-    bn,
-    bn,
-    bn,
-    q
-  );
-  const proofEDL = makeProofEqualDiscreteLogs(hash, g, g, bn, bn, q);
 
   test('SMPMessage1 succeeds', () => {
-    const g = multiplicativeGroupFactory();
-    const bn = secretFactory();
-    const q = secretFactory();
-    const proofDiscreteLog = makeProofDiscreteLog(hash, g, bn, bn, q);
-    const msg = new SMPMessage1(g, proofDiscreteLog, g, proofDiscreteLog);
+    const msg = smpMessage1Factory();
     expect(
       areSMPMessagesEqual(msg, SMPMessage1.fromTLV(msg.toTLV(), q))
     ).toBeTruthy();
   });
   test('SMPMessage2 succeeds', () => {
-    const msg = new SMPMessage2(
-      g,
-      proofDiscreteLog,
-      g,
-      proofDiscreteLog,
-      g,
-      g,
-      proofEDC
-    );
+    const msg = smpMessage2Factory();
     expect(
       areSMPMessagesEqual(msg, SMPMessage2.fromTLV(msg.toTLV(), q))
     ).toBeTruthy();
   });
   test('SMPMessage3 succeeds', () => {
-    const msg = new SMPMessage3(g, g, proofEDC, g, proofEDL);
+    const msg = smpMessage3Factory();
     expect(
       areSMPMessagesEqual(msg, SMPMessage3.fromTLV(msg.toTLV(), q))
     ).toBeTruthy();
   });
   test('SMPMessage4 succeeds', () => {
-    const msg = new SMPMessage4(g, proofEDL);
+    const msg = smpMessage4Factory();
     expect(
       areSMPMessagesEqual(msg, SMPMessage4.fromTLV(msg.toTLV(), q))
     ).toBeTruthy();

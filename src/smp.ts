@@ -1,6 +1,7 @@
 import { randomBytes } from 'crypto';
 
 import BN from 'bn.js';
+import { sha256 } from 'js-sha256';
 
 import { MultiplicativeGroup } from './multiplicativeGroup';
 import { Config, defaultConfig } from './config';
@@ -472,11 +473,30 @@ class SMPStateFinished extends BaseSMPState {
   }
 }
 
+type TSecret = number | string | BN | Uint8Array;
+
 class SMPStateMachine {
   state: ISMPState;
 
-  constructor(x: BN, config: Config = defaultConfig) {
-    this.state = new SMPState1(x, config);
+  constructor(x: TSecret, config: Config = defaultConfig) {
+    this.state = new SMPState1(this.normalizeSecret(x), config);
+  }
+
+  private normalizeSecret(x: TSecret): BN {
+    let res: BN;
+    if (typeof x === 'number') {
+      res = new BN(x);
+    } else if (typeof x === 'string') {
+      res = new BN(sha256(x), 'hex');
+    } else if (x instanceof Uint8Array) {
+      res = new BN(x);
+    } else if (x instanceof BN) {
+      res = x;
+    } else {
+      // Sanity check
+      throw new ValueError('secret can only be the type of `TSecret`');
+    }
+    return res;
   }
 
   transit(msg: TypeTLVOrNull): TypeTLVOrNull {
