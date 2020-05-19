@@ -1,5 +1,3 @@
-import * as TCP from 'net';
-
 import BN from 'bn.js';
 
 import { smpHash } from '../src/hash';
@@ -13,7 +11,7 @@ import {
   TLV,
 } from '../src/msgs';
 import { multiplicativeGroupFactory, secretFactory } from '../src/factories';
-import { FailedToReadData, ValueError } from '../src/exceptions';
+import { ValueError } from '../src/exceptions';
 import { MultiplicativeGroup } from '../src/multiplicativeGroup';
 import {
   makeProofDiscreteLog,
@@ -44,44 +42,6 @@ describe('TLV', () => {
       expect(tlvFromExpected.type.value).toEqual(tlv.type.value);
       expect(tlvFromExpected.value).toEqual(tlv.value);
     }
-  });
-
-  test('readFromSocket', async () => {
-    const sendTLV = async (bytes: Uint8Array): Promise<TLV> => {
-      const ip = '127.0.0.1';
-      const port = 4000;
-
-      const server = TCP.createServer((sock: TCP.Socket) => {
-        sock.write(bytes);
-      });
-      server.listen(port, ip);
-      const sockClient = new TCP.Socket();
-      return new Promise((resolve, reject) => {
-        sockClient.connect(port, ip, () => {});
-        sockClient.on('readable', () => {
-          let tlv: TLV;
-          try {
-            tlv = TLV.readFromSocket(sockClient);
-            resolve(tlv);
-          } catch (e) {
-            reject(e);
-          } finally {
-            server.close();
-            sockClient.destroy();
-          }
-        });
-      });
-    };
-    // Correct format
-    const correctBytes = new Uint8Array([0, 0, 0, 2, 2, 3]);
-    const tlv = await sendTLV(correctBytes);
-    expect(tlv.type.value).toEqual(0);
-    expect(tlv.value).toEqual(new Uint8Array([2, 3]));
-    // Wrong format
-    const corruptedBytes = new Uint8Array([0, 0, 0, 2, 2]);
-    await expect(sendTLV(corruptedBytes)).rejects.toThrowError(
-      FailedToReadData
-    );
   });
   test('deserialize fails', () => {
     // Empty

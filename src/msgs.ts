@@ -1,8 +1,4 @@
-import * as TCP from 'net';
-
 import BN from 'bn.js';
-
-import { FailedToReadData } from './exceptions';
 
 import { MultiplicativeGroup } from './multiplicativeGroup';
 import {
@@ -29,34 +25,6 @@ class TLV extends BaseSerializable {
   // No need to store `length` since it is implied in `value`.
   constructor(readonly type: BaseFixedInt, readonly value: Uint8Array) {
     super();
-  }
-
-  static readFromSocket(socket: TCP.Socket): TLV {
-    const typeBytes = socket.read(Short.size);
-    if (
-      typeBytes === null ||
-      (typeBytes instanceof Buffer && typeBytes.length !== Short.size)
-    ) {
-      throw new FailedToReadData('failed to read type');
-    }
-    const type = Short.deserialize(typeBytes);
-    const lengthBytes = socket.read(Short.size);
-    if (
-      lengthBytes === null ||
-      (lengthBytes instanceof Buffer && lengthBytes.length !== Short.size)
-    ) {
-      throw new FailedToReadData('failed to read length');
-    }
-    const length = Short.deserialize(lengthBytes).value;
-    const valueBytes = socket.read(length);
-    if (
-      valueBytes === null ||
-      (valueBytes instanceof Buffer && valueBytes.length !== length)
-    ) {
-      throw new FailedToReadData('failed to read value');
-    }
-    const value = new Uint8Array(valueBytes);
-    return new TLV(type, value);
   }
 
   static deserialize(bytes: Uint8Array): TLV {
