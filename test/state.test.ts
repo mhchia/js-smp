@@ -1,6 +1,6 @@
 import BN from 'bn.js';
 
-import { SMPStateMachine } from '../src/smp';
+import { SMPStateMachine } from '../src/state';
 import { SMPNotFinished, ValueError } from '../src/exceptions';
 import {
   tlvFactory,

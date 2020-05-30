@@ -1,3 +1,3 @@
-import { SMPStateMachine } from './smp';
+import { SMPStateMachine } from './state';
 
 export { SMPStateMachine };
