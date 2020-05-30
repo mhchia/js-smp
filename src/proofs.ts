@@ -4,7 +4,8 @@
  *  - section 2 in https://www.win.tue.nl/~berry/papers/dam.pdf
  * Implementation details can be found in the OTR spec version 3
  *  - https://otr.cypherpunks.ca/Protocol-v3-4.1.1.html
- * @packageDocumentation
+ *
+ * TODO: Change the proof types to classes?
  */
 
 import BN from 'bn.js';
