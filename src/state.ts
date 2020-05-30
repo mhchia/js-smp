@@ -609,6 +609,8 @@ class SMPStateMachine {
     return res;
   }
 
+  // TODO: Add initiate, which makes `transit` get rid of `null`.
+
   /**
    * Transit our state based on the current state and the input SMP messages.
    *
