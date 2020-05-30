@@ -1,3 +1,7 @@
+/**
+ * Factory functions used for testing.
+ */
+
 import { randomBytes } from 'crypto';
 
 import BN from 'bn.js';

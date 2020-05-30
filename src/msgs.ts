@@ -13,12 +13,13 @@ import { concatUint8Array } from './utils';
 import { NotImplemented, ValueError } from './exceptions';
 
 /**
- * TLV record is of the form:
- *  Type (SHORT)
+ * `TLV` stands for "Type, Length, and Value", literally its wire format.
+ * A `TLV` record consist of the fields:
+ *  Type: `Short`
  *    The type of this record. Records with unrecognized types should be ignored.
- *  Length (SHORT)
+ *  Length: `Short`
  *    The length of the following field
- *  Value (len BYTEs) [where len is the value of the Length field]
+ *  Value: `Byte[]` with length `len`(where len is the value of the Length field)
  *    Any pertinent data for the record type.
  */
 class TLV extends BaseSerializable {
@@ -53,7 +54,7 @@ class TLV extends BaseSerializable {
   }
 }
 
-/* TLV types */
+/** TLV types */
 /**
  * Type 2: SMP Message 1
  *  The value represents an initiating message of the Socialist Millionaires' Protocol.
@@ -75,38 +76,8 @@ const TLVTypeSMPMessage3 = new Short(4);
  */
 const TLVTypeSMPMessage4 = new Short(5);
 
-function deserializeSMPTLV(tlv: TLV): MPI[] {
-  let bytes = tlv.value;
-  const mpiCount = Int.deserialize(bytes.slice(0, Int.size));
-  let bytesRemaining = bytes.slice(Int.size);
-  const elements: MPI[] = [];
-  let mpi: MPI;
-  for (let i = 0; i < mpiCount.value; i++) {
-    [mpi, bytesRemaining] = MPI.consume(bytesRemaining);
-    elements.push(mpi);
-  }
-  return elements;
-}
-
-function serializeSMPTLV(
-  type: BaseFixedInt,
-  ...elements: (BN | MultiplicativeGroup)[]
-): TLV {
-  const length = new Int(elements.length);
-  let res = length.serialize();
-  for (const element of elements) {
-    let mpi: MPI;
-    if (element instanceof BN) {
-      mpi = new MPI(element);
-    } else {
-      mpi = MPI.fromMultiplicativeGroup(element);
-    }
-    res = concatUint8Array(res, mpi.serialize());
-  }
-  return new TLV(type, res);
-}
-
 /**
+ * TODO: Consider extending from `TLV`.
  * SMP Message TLVs (types 2-5) all carry data sharing the same general format:
  *  MPI count (INT)
  *    The number of MPIs contained in the remainder of the TLV.
@@ -119,7 +90,7 @@ function serializeSMPTLV(
 abstract class BaseSMPMessage {
   abstract wireValues: (BN | MultiplicativeGroup)[];
 
-  static getMPIsfromTLV(
+  static tlvToMPIs(
     type: BaseFixedInt,
     expectedLength: number,
     tlv: TLV
@@ -129,13 +100,39 @@ abstract class BaseSMPMessage {
         `type mismatch: type.value=${type.value}, tlv.type.value=${tlv.type.value}`
       );
     }
-    const mpis = deserializeSMPTLV(tlv);
+    let bytes = tlv.value;
+    const mpiCount = Int.deserialize(bytes.slice(0, Int.size));
+    let bytesRemaining = bytes.slice(Int.size);
+    const mpis: MPI[] = [];
+    let mpi: MPI;
+    for (let i = 0; i < mpiCount.value; i++) {
+      [mpi, bytesRemaining] = MPI.consume(bytesRemaining);
+      mpis.push(mpi);
+    }
     if (expectedLength !== mpis.length) {
       throw new ValueError(
         `length of tlv=${tlv} mismatches: expectedLength=${expectedLength}`
       );
     }
     return mpis;
+  }
+
+  mpisToTLV(
+    type: BaseFixedInt,
+    ...elements: (BN | MultiplicativeGroup)[]
+  ): TLV {
+    const length = new Int(elements.length);
+    let res = length.serialize();
+    for (const element of elements) {
+      let mpi: MPI;
+      if (element instanceof BN) {
+        mpi = new MPI(element);
+      } else {
+        mpi = MPI.fromMultiplicativeGroup(element);
+      }
+      res = concatUint8Array(res, mpi.serialize());
+    }
+    return new TLV(type, res);
   }
 
   // abstract methods
@@ -180,7 +177,7 @@ class SMPMessage1 extends BaseSMPMessage {
   }
 
   static fromTLV(tlv: TLV, groupOrder: BN): SMPMessage1 {
-    const mpis = this.getMPIsfromTLV(TLVTypeSMPMessage1, 6, tlv);
+    const mpis = this.tlvToMPIs(TLVTypeSMPMessage1, 6, tlv);
     return new SMPMessage1(
       new MultiplicativeGroup(groupOrder, mpis[0].value),
       { c: mpis[1].value, d: mpis[2].value },
@@ -190,7 +187,7 @@ class SMPMessage1 extends BaseSMPMessage {
   }
 
   toTLV(): TLV {
-    return serializeSMPTLV(TLVTypeSMPMessage1, ...this.wireValues);
+    return this.mpisToTLV(TLVTypeSMPMessage1, ...this.wireValues);
   }
 }
 
@@ -253,7 +250,7 @@ class SMPMessage2 extends BaseSMPMessage {
   }
 
   static fromTLV(tlv: TLV, groupOrder: BN): SMPMessage2 {
-    const mpis = this.getMPIsfromTLV(TLVTypeSMPMessage2, 11, tlv);
+    const mpis = this.tlvToMPIs(TLVTypeSMPMessage2, 11, tlv);
     return new SMPMessage2(
       new MultiplicativeGroup(groupOrder, mpis[0].value),
       { c: mpis[1].value, d: mpis[2].value },
@@ -266,7 +263,7 @@ class SMPMessage2 extends BaseSMPMessage {
   }
 
   toTLV(): TLV {
-    return serializeSMPTLV(TLVTypeSMPMessage2, ...this.wireValues);
+    return this.mpisToTLV(TLVTypeSMPMessage2, ...this.wireValues);
   }
 }
 
@@ -317,7 +314,7 @@ class SMPMessage3 extends BaseSMPMessage {
   }
 
   static fromTLV(tlv: TLV, groupOrder: BN): SMPMessage3 {
-    const mpis = this.getMPIsfromTLV(TLVTypeSMPMessage3, 8, tlv);
+    const mpis = this.tlvToMPIs(TLVTypeSMPMessage3, 8, tlv);
     return new SMPMessage3(
       new MultiplicativeGroup(groupOrder, mpis[0].value),
       new MultiplicativeGroup(groupOrder, mpis[1].value),
@@ -328,7 +325,7 @@ class SMPMessage3 extends BaseSMPMessage {
   }
 
   toTLV(): TLV {
-    return serializeSMPTLV(TLVTypeSMPMessage3, ...this.wireValues);
+    return this.mpisToTLV(TLVTypeSMPMessage3, ...this.wireValues);
   }
 }
 
@@ -352,7 +349,7 @@ class SMPMessage4 extends BaseSMPMessage {
   }
 
   static fromTLV(tlv: TLV, groupOrder: BN): SMPMessage4 {
-    const mpis = this.getMPIsfromTLV(TLVTypeSMPMessage4, 3, tlv);
+    const mpis = this.tlvToMPIs(TLVTypeSMPMessage4, 3, tlv);
     return new SMPMessage4(new MultiplicativeGroup(groupOrder, mpis[0].value), {
       c: mpis[1].value,
       d: mpis[2].value,
@@ -360,7 +357,7 @@ class SMPMessage4 extends BaseSMPMessage {
   }
 
   toTLV(): TLV {
-    return serializeSMPTLV(TLVTypeSMPMessage4, ...this.wireValues);
+    return this.mpisToTLV(TLVTypeSMPMessage4, ...this.wireValues);
   }
 }
 

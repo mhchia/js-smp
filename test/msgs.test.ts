@@ -56,7 +56,7 @@ describe('TLV', () => {
 });
 
 describe('BaseSMPMessage', () => {
-  test('getMPIsfromTLV succeeds', () => {
+  test('tlvToMPIs succeeds', () => {
     const bytes = new Uint8Array([
       0,
       0,
@@ -75,11 +75,11 @@ describe('BaseSMPMessage', () => {
     ]);
     const type = new Short(0);
     const tlv = new TLV(type, bytes);
-    const mpis = BaseSMPMessage.getMPIsfromTLV(type, 2, tlv);
+    const mpis = BaseSMPMessage.tlvToMPIs(type, 2, tlv);
     expect(mpis[0].value.eqn(1)).toBeTruthy();
     expect(mpis[1].value.eqn(2)).toBeTruthy();
   });
-  test('getMPIsfromTLV fails', () => {
+  test('tlvToMPIs fails', () => {
     const bytes = new Uint8Array([
       0,
       0,
@@ -101,11 +101,11 @@ describe('BaseSMPMessage', () => {
     const typeAnother = new Short(1);
     // Wrong type
     expect(() => {
-      BaseSMPMessage.getMPIsfromTLV(typeAnother, 2, tlv);
+      BaseSMPMessage.tlvToMPIs(typeAnother, 2, tlv);
     }).toThrowError(ValueError);
     // Wrong length
     expect(() => {
-      BaseSMPMessage.getMPIsfromTLV(type, 3, tlv);
+      BaseSMPMessage.tlvToMPIs(type, 3, tlv);
     }).toThrowError(ValueError);
     // Invalid MPI format
     const wrongMPIs = new Uint8Array([
@@ -117,7 +117,7 @@ describe('BaseSMPMessage', () => {
     ]);
     const wrongTLV = new TLV(type, wrongMPIs);
     expect(() => {
-      BaseSMPMessage.getMPIsfromTLV(type, 2, wrongTLV);
+      BaseSMPMessage.tlvToMPIs(type, 2, wrongTLV);
     }).toThrowError(ValueError);
   });
 });

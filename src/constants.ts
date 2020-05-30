@@ -1,4 +1,7 @@
-// Ref: https://otr.cypherpunks.ca/Protocol-v3-4.1.1.html
+/**
+ * The parameters specified in OTR version 3 spec.
+ * Ref: https://otr.cypherpunks.ca/Protocol-v3-4.1.1.html
+ */
 
 const MODULUS = `
 FFFFFFFF FFFFFFFF C90FDAA2 2168C234 C4C6628B 80DC1CD1
