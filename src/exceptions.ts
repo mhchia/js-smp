@@ -16,13 +16,6 @@ class SMPStateError extends BaseSMPError {
     Object.setPrototypeOf(this, SMPStateError.prototype);
   }
 }
-class InvalidState extends SMPStateError {
-  constructor(m?: string) {
-    super(m);
-    // Set the prototype explicitly.
-    Object.setPrototypeOf(this, InvalidState.prototype);
-  }
-}
 class InvalidElement extends SMPStateError {
   constructor(m?: string) {
     super(m);
@@ -35,13 +28,6 @@ class InvalidProof extends SMPStateError {
     super(m);
     // Set the prototype explicitly.
     Object.setPrototypeOf(this, InvalidProof.prototype);
-  }
-}
-class StateMemberNotFound extends SMPStateError {
-  constructor(m?: string) {
-    super(m);
-    // Set the prototype explicitly.
-    Object.setPrototypeOf(this, StateMemberNotFound.prototype);
   }
 }
 class SMPNotFinished extends SMPStateError {
@@ -75,31 +61,12 @@ class ValueError extends ParsingError {
   }
 }
 
-class NetworkingError extends BaseSMPError {
-  constructor(m?: string) {
-    super(m);
-    // Set the prototype explicitly.
-    Object.setPrototypeOf(this, NetworkingError.prototype);
-  }
-}
-class FailedToReadData extends NetworkingError {
-  constructor(m?: string) {
-    super(m);
-    // Set the prototype explicitly.
-    Object.setPrototypeOf(this, FailedToReadData.prototype);
-  }
-}
-
 export {
-  InvalidState,
   InvalidElement,
   InvalidProof,
-  StateMemberNotFound,
   NotImplemented,
   ValueError,
   SMPNotFinished,
-  FailedToReadData,
   SMPStateError,
-  NetworkingError,
   BaseSMPError,
 };
