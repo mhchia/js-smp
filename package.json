@@ -15,7 +15,8 @@
     "start": "tsdx watch",
     "build": "tsc",
     "test": "tsdx test",
-    "lint": "tsdx lint"
+    "lint": "tsdx lint",
+    "release": "npm run build && npm publish"
   },
   "peerDependencies": {},
   "husky": {
