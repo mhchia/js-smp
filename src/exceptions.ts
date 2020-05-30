@@ -16,11 +16,14 @@ class SMPStateError extends BaseSMPError {
     Object.setPrototypeOf(this, SMPStateError.prototype);
   }
 }
-class InvalidElement extends SMPStateError {
+/**
+ * Invalid group elements are received.
+ */
+class InvalidGroupElement extends SMPStateError {
   constructor(m?: string) {
     super(m);
     // Set the prototype explicitly.
-    Object.setPrototypeOf(this, InvalidElement.prototype);
+    Object.setPrototypeOf(this, InvalidGroupElement.prototype);
   }
 }
 class InvalidProof extends SMPStateError {
@@ -62,7 +65,7 @@ class ValueError extends ParsingError {
 }
 
 export {
-  InvalidElement,
+  InvalidGroupElement,
   InvalidProof,
   NotImplemented,
   ValueError,

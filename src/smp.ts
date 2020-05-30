@@ -21,7 +21,7 @@ import {
 } from './proofs';
 
 import {
-  InvalidElement,
+  InvalidGroupElement,
   InvalidProof,
   ValueError,
   NotImplemented,
@@ -227,7 +227,7 @@ class SMPState1 extends BaseSMPState {
         !this.verifyMultiplicativeGroup(msg.g2a) ||
         !this.verifyMultiplicativeGroup(msg.g3a)
       ) {
-        throw new InvalidElement();
+        throw new InvalidGroupElement();
       }
       // Verify the proofs
       if (!this.verifyDHPubkey(1, msg.g2a, msg.g2aProof)) {
@@ -301,7 +301,7 @@ class SMPState2 extends BaseSMPState {
       !this.verifyMultiplicativeGroup(msg.pb) ||
       !this.verifyMultiplicativeGroup(msg.qb)
     ) {
-      throw new InvalidElement();
+      throw new InvalidGroupElement();
     }
     if (!this.verifyDHPubkey(3, msg.g2b, msg.g2bProof)) {
       throw new InvalidProof();
@@ -379,7 +379,7 @@ class SMPState3 extends BaseSMPState {
       !this.verifyMultiplicativeGroup(msg.qa) ||
       !this.verifyMultiplicativeGroup(msg.ra)
     ) {
-      throw new InvalidElement();
+      throw new InvalidGroupElement();
     }
     if (
       !this.verifyPRQRProof(6, this.g2, this.g3, msg.pa, msg.qa, msg.paqaProof)
@@ -438,7 +438,7 @@ class SMPState4 extends BaseSMPState {
     }
     const msg = SMPMessage4.fromTLV(tlv, this.config.modulus);
     if (!this.verifyMultiplicativeGroup(msg.rb)) {
-      throw new InvalidElement();
+      throw new InvalidGroupElement();
     }
     if (!this.verifyRR(8, this.g3R, msg.rb, msg.rbProof, this.qL, this.qR)) {
       throw new InvalidProof();
