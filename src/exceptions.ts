@@ -1,7 +1,11 @@
-// To workaround for the issue that "isinstance is borken when class extends `Error` type,
-// we need to override `constructor` to set prototype for each error.
-//  - https://github.com/Microsoft/TypeScript/issues/13965
-//  - https://github.com/Microsoft/TypeScript/wiki/Breaking-Changes#extending-built-ins-like-error-array-and-map-may-no-longer-work
+/**
+ * Exceptions: to workaround for the issue that "isinstance is borken when class extends
+ *  `Error` type, we need to override `constructor` to set prototype for each error.
+ *  Ref
+ *    - https://github.com/Microsoft/TypeScript/issues/13965
+ *    - https://github.com/Microsoft/TypeScript/wiki/Breaking-Changes#extending-built-ins-like-error-array-and-map-may-no-longer-work
+ */
+
 class BaseSMPError extends Error {
   constructor(m?: string) {
     super(m);
@@ -9,6 +13,10 @@ class BaseSMPError extends Error {
     Object.setPrototypeOf(this, BaseSMPError.prototype);
   }
 }
+
+/**
+ * Base error for `SMPState` related errors.
+ */
 class SMPStateError extends BaseSMPError {
   constructor(m?: string) {
     super(m);
