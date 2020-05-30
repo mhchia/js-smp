@@ -611,10 +611,14 @@ class SMPStateMachine {
 
   /**
    * Transit our state based on the current state and the input SMP messages.
+   *
    * @param msg - Either a `TLV` type SMP message or `null` are accepted. `null` indicates we are
    *  the initiator of the SMP protocol.
    * @returns A `TLV` type SMP message or `null`. `null` is returned when there is nothing to
    *  return.
+   *
+   * TODO: Probably we don't even need to expose `TLV`. Just make `SMPStateMachine` output or
+   *  consume from `Uint8Array`.
    */
   transit(msg: TypeTLVOrNull): TypeTLVOrNull {
     const [newState, retMsg] = this.state.transit(msg);
