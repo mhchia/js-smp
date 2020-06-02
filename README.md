@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="https://github.com/actions/checkout"><img alt="GitHub Actions status" src="https://github.com/mhchia/js-smp/workflows/nodejs-test/badge.svg"></a>
+  <a href="https://github.com/mhchia/js-smp/actions?workflow=nodejs-test"><img alt="GitHub Actions status" src="https://github.com/mhchia/js-smp/workflows/nodejs-test/badge.svg"></a>
 </p>
 
 # js-smp
