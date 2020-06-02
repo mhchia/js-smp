@@ -1,3 +1,7 @@
+<p align="center">
+  <a href="https://github.com/actions/checkout"><img alt="GitHub Actions status" src="https://github.com/mhchia/js-smp/workflows/nodejs-test/badge.svg"></a>
+</p>
+
 # js-smp
 
 `js-smp` is a typescript implementation of the SMP(Socialist Millionaires' Problem) Protocol, which allows two people to compare whether their secrets are equaled, without leaking any other information.
