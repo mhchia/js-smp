@@ -85,7 +85,7 @@ abstract class BaseSMPState implements ISMPState {
    */
   getRandomSecret(): BN {
     const buf = randomBytes(this.config.modulusSize);
-    return new BN(buf.toString('hex'), 'hex').umod(this.config.modulus);
+    return new BN(buf.toString('hex'), 'hex').umod(this.config.q);
   }
 
   /**
@@ -583,7 +583,7 @@ class SMPStateMachine {
    * @param config - Config for the underlying math and serialization.
    */
   constructor(x: TSecret, config: Config = defaultConfig) {
-    this.state = new SMPState1(this.normalizeSecret(x), config);
+    this.state = new SMPState1(this.normalizeSecret(x).umod(config.q), config);
   }
 
   /**
