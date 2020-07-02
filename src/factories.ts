@@ -24,7 +24,7 @@ import { smpHash } from '../src/hash';
 
 function secretFactory(): BN {
   const buf = randomBytes(defaultConfig.modulusSize);
-  return new BN(buf.toString('hex'), 'hex').umod(defaultConfig.modulus);
+  return new BN(buf.toString('hex'), 'hex').umod(defaultConfig.q);
 }
 
 function multiplicativeGroupFactory(): MultiplicativeGroup {

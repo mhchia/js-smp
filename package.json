@@ -1,7 +1,7 @@
 {
   "name": "js-smp",
   "description": "A typescript implementation of Socialist Millionaire Problem Protocol in Off-the-record Messaging(OTR) version 3",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "license": "MIT",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
@@ -15,7 +15,8 @@
     "start": "tsdx watch",
     "build": "tsc",
     "test": "tsdx test",
-    "lint": "tsdx lint"
+    "lint": "tsdx lint",
+    "release": "npm run build && npm publish"
   },
   "peerDependencies": {},
   "husky": {
